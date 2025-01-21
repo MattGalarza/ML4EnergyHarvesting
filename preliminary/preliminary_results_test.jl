@@ -623,12 +623,12 @@ for t in 1:length(x_time)
 end
 
 p33 = plot(x_time, l2_errors, xlabel = "Time (s)", ylabel = "L2 Norm Error", label = "State Space Error")
-title!(p_33, "L2 Norm Error Across All States")
-display(p_33)
+title!(p33, "L2 Norm Error Across All States")
+display(p33)
 
 # Error statistics
 println("\nError Statistics:")
 println("Mean L2 Error: ", mean(l2_errors))
 println("Max L2 Error: ", maximum(l2_errors))
-println("Mean Voltage Error: ", mean(abs.(voltage_error)))
-println("Max Voltage Error: ", maximum(abs.(voltage_error)))
+println("Mean Voltage Error: ", mean(abs.(pred_error)))
+println("Max Voltage Error: ", maximum(abs.(pred_error)))
