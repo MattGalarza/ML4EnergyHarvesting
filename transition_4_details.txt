@@ -1,0 +1,8 @@
+Transition 4 Analysis
+Time: 0.216482 s
+States before transition:
+x1: -1.3703795901115466e-5
+x2: -1.3687799859523993e-5
+States after transition:
+x1: -1.359670086354097e-5
+x2: -1.3591920151356257e-5

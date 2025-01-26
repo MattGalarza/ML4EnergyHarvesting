@@ -1,0 +1,8 @@
+Transition 16 Analysis
+Time: 0.366483 s
+States before transition:
+x1: -1.3703782023744717e-5
+x2: -1.3687788788714004e-5
+States after transition:
+x1: -1.359666692358676e-5
+x2: -1.3591888170852229e-5
