@@ -396,10 +396,188 @@ display(p23)
 p24 = plot(sol.t, Fext_norm, xlabel = "Time (s)", ylabel = "Fext (N)", title = "Norm (Fext)")
 display(p24)
 
+# ---------------------------- Test the dynamical mode transition ----------------------------
+
+# Function to find transition points with threshold
+function find_transitions(sol, gp, threshold=1e-7)
+    transition_points = Float64[]
+    transition_indices = Int[]
+    
+    for i in 2:length(sol.t)
+        gap_prev = p_new.gp - abs(sol.u[i-1][3])
+        gap_curr = p_new.gp - abs(sol.u[i][3])
+        
+        if (gap_prev > threshold && gap_curr <= threshold) || 
+           (gap_prev <= threshold && gap_curr > threshold)
+            push!(transition_points, sol.t[i])
+            push!(transition_indices, i)
+        end
+    end
+    return transition_points, transition_indices
+ end
+ 
+ # Function to analyze window around transition
+ function analyze_transition_window(sol, t_transition, window_size=0.001)
+    window_indices = findall(t -> abs(t - t_transition) <= window_size, sol.t)
+    t_window = sol.t[window_indices]
+    states_window = sol.u[window_indices]
+    return t_window, states_window
+ end
+ 
+ # Function to calculate all forces
+ function calculate_all_forces(z, p)
+    z1, z2, z3, z4, z5, Vout = z
+    
+    Fs = AnalyticalModel.spring(z1, p.k1, p.k3, p.gss, p.kss)
+    _, Fc = AnalyticalModel.collision(z1, z3, p.m2, p.ke, p.gp)
+    Fd = AnalyticalModel.damping(z3, z4, p.a, p.c, p.gp, p.Leff, p.Tf, p.eta)
+    _, Fe = AnalyticalModel.electrostatic(z1, z3, z5, p.g0, p.gp, p.a, p.e, p.ep, p.cp, 
+                                        p.wt, p.wb, p.ke, p.E, p.I, p.Leff, p.Tf, p.Tp, p.N)
+    
+    return Fs, Fc, Fd, Fe
+ end
+ 
+ # Plot gap distance over time
+ gap_distance = [p_new.gp - abs(u[3]) for u in sol.u]
+ p_gap = plot(sol.t, gap_distance,
+             xlabel="Time (s)",
+             ylabel="Gap Distance (m)",
+             title="Electrode Gap Distance")
+ hline!([0.0], label="Contact threshold", linestyle=:dash, color=:red)
+ display(p_gap)
+ 
+ # Find transitions
+ transition_times, transition_idx = find_transitions(sol, p_new.gp)
+ println("Found $(length(transition_times)) transitions at times: ", transition_times)
+ 
+ # Create plots for each transition
+ for (i, t_trans) in enumerate(transition_times)
+    # Get window of data
+    t_window, states_window = analyze_transition_window(sol, t_trans)
+    
+    # Extract state variables
+    x1_window = [s[1] for s in states_window]
+    x1dot_window = [s[2] for s in states_window]
+    x2_window = [s[3] for s in states_window]
+    x2dot_window = [s[4] for s in states_window]
+    Qvar_window = [s[5] for s in states_window]
+    V_window = [s[6] for s in states_window]
+    
+    # Determine if we're in positive or negative region
+    mean_x2 = mean(x2_window)
+    gp_threshold = mean_x2 > 0 ? p_new.gp : -p_new.gp
+    
+    # Calculate forces
+    forces_window = [calculate_all_forces(s, p_new) for s in states_window]
+    
+    # Phase space plot
+    p_phase = plot(x2_window, x2dot_window,
+                  xlabel="x2 (m)",
+                  ylabel="x2dot (m/s)",
+                  title="Phase Portrait Around Transition $i (t=$(round(t_trans, digits=4)))",
+                  marker=:circle,
+                  markersize=2)
+    vline!([p_new.gp], label="gp threshold", linestyle=:dash, color=:red)
+    display(p_phase)
+    
+    # Positions plot
+    p_pos = plot(t_window .- t_trans,
+                [x1_window x2_window],
+                label=["x1" "x2"],
+                xlabel="Time from transition (s)",
+                ylabel="Position (m)",
+                title="Positions Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    hline!([gp_threshold], label="gp threshold", linestyle=:dash, color=:red)
+    display(p_pos)
+    
+    # Velocities plot
+    p_vel = plot(t_window .- t_trans,
+                [x1dot_window x2dot_window],
+                label=["x1dot" "x2dot"],
+                xlabel="Time from transition (s)",
+                ylabel="Velocity (m/s)",
+                title="Velocities Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    display(p_vel)
+    
+    # Electrical variables plot
+    p_elec = plot(t_window .- t_trans,
+                 [Qvar_window V_window],
+                 label=["Qvar" "Voltage"],
+                 xlabel="Time from transition (s)",
+                 ylabel="Electrical Values",
+                 title="Electrical Variables Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    display(p_elec)
+    
+    # Individual force plots
+    p_fs = plot(t_window .- t_trans,
+               [f[1] for f in forces_window],
+               label="Fs",
+               xlabel="Time from transition (s)",
+               ylabel="Force (N)",
+               title="Spring Force Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    display(p_fs)
+    
+    p_fc = plot(t_window .- t_trans,
+               [f[2] for f in forces_window],
+               label="Fc",
+               xlabel="Time from transition (s)",
+               ylabel="Force (N)",
+               title="Collision Force Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    display(p_fc)
+    
+    p_fd = plot(t_window .- t_trans,
+               [f[3] for f in forces_window],
+               label="Fd",
+               xlabel="Time from transition (s)",
+               ylabel="Force (N)",
+               title="Damping Force Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    display(p_fd)
+    
+    p_fe = plot(t_window .- t_trans,
+               [f[4] for f in forces_window],
+               label="Fe",
+               xlabel="Time from transition (s)",
+               ylabel="Force (N)",
+               title="Electrostatic Force Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    display(p_fe)
+    
+    # Calculate and display metrics
+    dt = diff(t_window)
+    dx2 = diff(x2_window)
+    dx2dot = diff(x2dot_window)
+    
+    println("\nTransition $i Analysis (t = $(round(t_trans, digits=4))):")
+    println("Max dx2/dt: ", maximum(abs.(dx2 ./ dt)))
+    println("Max dx2dot/dt: ", maximum(abs.(dx2dot ./ dt)))
+    println("Gap at transition: ", p_new.gp - abs(x2_window[length(x2_window)÷2]))
+ end
+ 
+ # Print min/max gap values for debugging
+ println("\nGap Analysis:")
+ println("Min gap: ", minimum(gap_distance))
+ println("Max gap: ", maximum(gap_distance))
+ println("gp value: ", p_new.gp)
+ 
+ # Plot gap histogram to see distribution
+ histogram(gap_distance, 
+          bins=100,
+          xlabel="Gap Distance (m)",
+          ylabel="Count",
+          title="Distribution of Gap Distances")
+ display(current())
+return 
+
 # ------------------------------------ Generate test data ------------------------------------
 
 # Fixed time and sampling rate 
-dt = 0.0001
+dt = 0.00001
 t_points = tspan[1]:dt:tspan[2]
 
 # First set --> "True" data
@@ -458,12 +636,9 @@ u0_norm = [
 rbf(x) = exp.(-(x .^ 2))
 
 # Multilayer FeedForward Neural Network
-const U = Lux.Chain(Lux.Dense(7, 32, rbf), # 7 inputs: 6 states + 1 acceleration
-                    # Lux.Dense(32, 32, rbf),
-                    # Lux.Dense(32, 64, rbf), 
-                    # Lux.Dense(64, 32, rbf),
-                    Lux.Dense(32, 32, rbf),
-                    Lux.Dense(32, 6) # 6 outputs for state corrections
+const U = Lux.Chain(Lux.Dense(7, 64, rbf), # 7 inputs: 6 states + 1 acceleration
+                    Lux.Dense(64, 64, rbf),
+                    Lux.Dense(64, 6) # 6 outputs for state corrections
 ) 
 
 # Initialize NN
@@ -551,7 +726,7 @@ optf = OptimizationFunction((θ, p) -> loss(θ), Optimization.AutoZygote())
 optprob = OptimizationProblem(optf, p_flat)
 
 println("\nStarting optimization...")
-res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 20)
+res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 100)
 println("Training loss after $(length(losses)) iterations: $(losses[end])")
 
 # ------------------------------------ Plots after UDE ------------------------------------
@@ -559,6 +734,7 @@ println("Training loss after $(length(losses)) iterations: $(losses[end])")
 # Plot the NN trajectories vs model trajectories for all states
 println("\nGenerating final plots...")
 p_traj = plot(layout=(3,2), size=(1000,800))
+final_pred = predict(res.u)
 state_labels = ["x1", "x1dot", "x2", "x2dot", "Qvar", "V"]
 original_states = [normalizer([u[i] for u in sol1.u], eval(Symbol(state_labels[i], "_min")), eval(Symbol(state_labels[i], "_max"))) for i in 1:6]
 
@@ -571,7 +747,6 @@ title!(p_traj, "State Trajectories: Original vs UDE")
 display(p_traj)
 
 # Plot original, modified and UDE predition
-final_pred = predict(res.u)
 p26 = plot(x_time, y_voltage, label = "Original Model", xlabel = "Time (s)", ylabel = "Normalized Voltage")
 plot!(p26, x_time, V2_norm, label = "Modified Model")
 plot!(p26, x_time, final_pred[6,:], label = "UDE Prediction")
