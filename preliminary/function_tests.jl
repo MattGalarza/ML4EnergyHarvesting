@@ -93,7 +93,7 @@ display(p2)
 # ------------------------------- Electrode Restoring + Collision ---------------------------
 
 # Electrode collision force, Fc
-function collision_original(x1, x2, m2, ke, gp)
+function collision(x1, x2, m2, ke, gp)
     if abs(x2) < gp
         m2_out = m2
         Fc = -ke * (x1 - x2)
@@ -105,81 +105,84 @@ function collision_original(x1, x2, m2, ke, gp)
 end
 
 # Smoothed electrode collision force, Fc
-function collision_smooth(x1, x2, m2, ke, gp, alpha=1e6)
+function collision_smoothed(x1, x2, m2, ke, gp, alpha=1e6)
     # Non-collision restoring force
     Fnc = -ke * (x1 - x2)
 
-    # Smooth transition function (same as before)
-    S = 0.5 * (1 + tanh(alpha * (abs(x2) - gp)))
-    
-    # Smoothly interpolate mass
-    m2_effective = m2 * (1 + S)  # Smoothly transitions from m2 to 2m2
-    
-    # Basic spring force (always present)
-    Fc_basic = -ke * (x1 - x2)
-    
-    # Additional contact force (smoothly activated)
-    Fc_contact = ke * (abs(x2) - gp) * sign(x2) * S
+    # Contact collision force
+    S = 0.5 * (1 + tanh(alpha * (abs(x2) - gp))) # Smooth transition function
+    m2_effective = m2 * (1 + S) # Calculation of mass
+    Fcc = ke * (abs(x2) - gp) * sign(x2) * S
     
     # Total force
-    Fc = Fc_basic + Fc_contact
-    
+    Fc = Fnc + Fcc
     return m2_effective, Fc
 end
 
-x1 = 0
+# Create a range difference for collision
+x1_collision = range(-1.367e-5, 1.367e-5, length = 10000)
 
-# Calculate forces and masses for both methods
-forces_orig = Float64[]
-masses_orig = Float64[]
-forces_smooth = Float64[]
-masses_smooth = Float64[]
+# Calculate forces and masses for both smoothed and non-smoothed
+Fc = Float64[]
+m = Float64[]
+Fc_smooth = Float64[]
+m_smooth = Float64[]
 
-for x2 in x2_range
-    m2_orig, f_orig = collision_original(x1, x2, m2, ke, gp)
-    m2_smooth, f_smooth = collision_smooth(x1, x2, m2, ke, gp)
+for i in 1:length(x2_range)
+    mass, force = collision(x1_collision[i], x2_range[i], m2, ke, gp)
+    mass_smooth, force_smooth = collision_smoothed(x1_collision[i], x2_range[i], m2, ke, gp)
     
-    push!(forces_orig, f_orig)
-    push!(masses_orig, m2_orig)
-    push!(forces_smooth, f_smooth)
-    push!(masses_smooth, m2_smooth)
+    push!(Fc, force)
+    push!(m, mass)
+    push!(Fc_smooth, force_smooth)
+    push!(m_smooth, mass_smooth)
 end
 
-# Create plots
-p1 = plot(x2_range .* 1e6, forces_orig,
-    xlabel="Displacement x₂ (μm)",
-    ylabel="Force (N)",
-    title="Collision Force",
-    label="Original",
-    linewidth=2,
-    grid=true)
+# Plot both smoothed and non-smooth forces
+p3 = plot(x2_range, Fc, xlabel = "Displacement (m)", ylabel = "Force (N)", title = "Fc vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
+plot!(x2_range, Fc_smooth, xlabel = "Displacement (m)", ylabel = "Force (N)", label = "Smoothed", linewidth=2) # linestyle=:dash
+vline!([-gss, gss], label = "Transition point", linestyle=:dash, color=:red)
+display(p3)
 
-plot!(x2_range .* 1e6, forces_smooth,
-    label="Smoothed",
-    linewidth=2,
-    linestyle=:dash)
+# Plot both smoothed and non-smooth forces
+p4 = plot(x2_range, m, xlabel = "Displacement (m)", ylabel = "Mass (kg)", title = "Mass vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
+plot!(x2_range, m_smooth, xlabel = "Displacement (m)", ylabel = "Mass (kg)", label = "Smoothed", linewidth=2) # linestyle=:dash
+vline!([-gss, gss], label = "Transition point", linestyle=:dash, color=:red)
+display(p4)
 
-vline!([-gp * 1e6, gp * 1e6],
-    label="Contact points",
-    linestyle=:dot,
-    color=:red)
 
-p2 = plot(x2_range .* 1e6, masses_orig .* 1e6,
-    xlabel="Displacement x₂ (μm)",
-    ylabel="Mass (μg)",
-    title="Effective Mass",
-    label="Original",
-    linewidth=2,
-    grid=true)
 
-plot!(x2_range .* 1e6, masses_smooth .* 1e6,
-    label="Smoothed",
-    linewidth=2,
-    linestyle=:dash)
+# Plot both smoothed and non-smooth forces (close up)
+zoom_range = range(-gss-0.5e-6, -gss+0.5e-6, length = 500)
+Fs_zoom = [spring(x1, k1, k3, gss, kss) for x1 in zoom_range]
+Fs_smoothed_zoom = [spring_smoothed(x1, k1, k3, gss, kss) for x1 in zoom_range]
+p2 = plot(zoom_range, Fs_zoom, xlabel = "Displacement (m)", ylabel = "Force (N)", title = "Fs vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
+plot!(zoom_range, Fs_smoothed_zoom, xlabel = "Displacement (m)", ylabel = "Force (N)", label = "Smoothed", linewidth=2) # linestyle=:dash
+vline!([-gss], label = "Transition point", linestyle=:dash, color=:red)
+display(p2)
 
-vline!([-gp * 1e6, gp * 1e6],
-    label="Contact points",
-    linestyle=:dot,
-    color=:red)
 
-plot(p1, p2, layout=(2,1), size=(800,800))
+
+# Create zoom range around transition point
+zoom_points = 500
+zoom_width = 0.5e-6  # Width of zoom window on each side
+zoom_range = range(gp-zoom_width, gp+zoom_width, length=zoom_points)
+x1_zoom = range(-1.367e-5, 1.367e-5, length=zoom_points)
+
+# Calculate zoom range forces
+Fc_zoom = Float64[]
+m_zoom = Float64[]
+Fc_smooth_zoom = Float64[]
+m_smooth_zoom = Float64[]
+
+for i in 1:length(zoom_range)
+    mass, force = collision(x1_zoom[i], zoom_range[i], m2, ke, gp)
+    mass_smooth, force_smooth = collision_smoothed(x1_zoom[i], zoom_range[i], m2, ke, gp)
+    
+    push!(Fc_zoom, force)
+    push!(m_zoom, mass)
+    push!(Fc_smooth_zoom, force_smooth)
+    push!(m_smooth_zoom, mass_smooth)
+end
+
+
