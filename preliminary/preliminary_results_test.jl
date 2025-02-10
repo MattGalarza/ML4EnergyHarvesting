@@ -68,15 +68,17 @@ end
 # Initialize a default Params instance
 p = Params{Float64}()
 
-# Suspension spring force, Fsp
-function spring(x1, k1, k3, gss, kss)
-    # Fsp = - k1 * x1 - k3 * (x1^3) # Suspension beam force
-    Fsp = -k1 * x1 # Suspension beam force
-    if abs(x1) < gss
-        Fss = 0.0
-    else
-        Fss = -kss * (abs(x1) - gss) * sign(x1) # Soft-stopper force
-    end
+# Suspension spring force, Fs
+function spring(x1, k1, k3, gss, kss, alpha=1e7)
+    # Suspension beam force
+    # Fsp = - k1 * x1 - k3 * (x1^3) 
+    Fsp = -k1 * x1 
+
+    # Soft stopper force
+    S = 0.5 * (1 + tanh(alpha * (abs(x1) - gss))) # Smooth transition function
+    Fss = -kss * (abs(x1) - gss) * sign(x1) * S
+    
+    # Total suspension spring force
     Fs = Fsp + Fss
     return Fs
 end
@@ -88,6 +90,7 @@ function collision(x1, x2, m2, ke, gp)
         Fc = -ke * (x1 - x2)
     else
         m2 = 2 * m2
+        # Fc = -2 * ke * (x1 - x2)
         Fc = -ke * (x1 - x2) + ke * (abs(x2) - gp) * sign(x2)
     end
     return m2, Fc
@@ -173,11 +176,11 @@ function CoupledSystem!(dz, z, p, t, current_acceleration)
 
     # Compute derivatives
     dz[1] = z2
-    dz[2] = (Fs + (p.N / 2) * Fc) / p.m1 - Fext
+    dz[2] = (Fs) / p.m1 - Fext  # + (p.N / 2) * Fc
     dz[3] = z4
-    dz[4] = (-Fc + Fd + Fe) / m2 - Fext
+    dz[4] = (-Fc + Fd + Fe) / m2
     dz[5] = (p.Vbias - (z5 / Ctotal)) / p.Rload
-    dz[6] = (p.Vbias - z5 / Ctotal - Vout) / (p.Rload * Ctotal)
+    dz[6] = (p.Vbias - (z5 / Ctotal) - Vout) / (p.Rload * Ctotal)
 end
 end
 
@@ -275,17 +278,17 @@ x2dot = [u[4] for u in sol.u]
 Qvar = [u[5] for u in sol.u]
 V = [u[6] for u in sol.u]
 
-p3 = plot(sol.t, x1, xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Mass Displacement (x1)")
+p3 = plot(sol.t[230000:end], x1[230000:end], xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Mass Displacement (x1)")
 display(p3)
-p4 = plot(sol.t, x1dot, xlabel = "Time (s)", ylabel = "x1dot (m/s)", title = "Shuttle Mass Velocity (x1dot)")
+p4 = plot(sol.t[230000:end], x1dot[230000:end], xlabel = "Time (s)", ylabel = "x1dot (m/s)", title = "Shuttle Mass Velocity (x1dot)")
 display(p4)
-p5 = plot(sol.t, x2, xlabel = "Time (s)", ylabel = "x2 (m)", title = "Mobile Electrode Displacement (x2)")
+p5 = plot(sol.t[230000:end], x2[230000:end], xlabel = "Time (s)", ylabel = "x2 (m)", title = "Mobile Electrode Displacement (x2)")
 display(p5)
-p6 = plot(sol.t, x2dot, xlabel = "Time (s)", ylabel = "x2dot (m/s)", title = "Mobile Electrode Velocity (x2)")
+p6 = plot(sol.t[230000:end], x2dot[230000:end], xlabel = "Time (s)", ylabel = "x2dot (m/s)", title = "Mobile Electrode Velocity (x2)")
 display(p6)
-p7 = plot(sol.t, Qvar, xlabel = "Time (s)", ylabel = "Qvar (C)", title = "Charge (Qvar)")
+p7 = plot(sol.t[230000:end], Qvar[230000:end], xlabel = "Time (s)", ylabel = "Qvar (C)", title = "Charge (Qvar)")
 display(p7)
-p8 = plot(sol.t, V, xlabel = "Time (s)", ylabel = "Vout (V)", title = "Output Voltage")
+p8 = plot(sol.t[230000:end], V[230000:end], xlabel = "Time (s)", ylabel = "Vout (V)", title = "Output Voltage")
 display(p8)
 
 # Generate forces during the simulation
@@ -322,13 +325,13 @@ for (i, t) in enumerate(sol.t)
 end
 
 # Plotting respective forces
-p9 = plot(sol.t, Fs_array, xlabel = "Time (s)", ylabel = "Fs (N)", title = "Suspension + Soft-stopper Spring Force")
+p9 = plot(sol.t[230000:end], Fs_array[230000:end], xlabel = "Time (s)", ylabel = "Fs (N)", title = "Suspension + Soft-stopper Spring Force")
 display(p9)
-p10 = plot(sol.t, Fc_array, xlabel = "Time (s)", ylabel = "Fc (N)", title = "Mobile Electrode Collision Force")
+p10 = plot(sol.t[230000:end], Fc_array[230000:end], xlabel = "Time (s)", ylabel = "Fc (N)", title = "Mobile Electrode Collision Force")
 display(p10)
-p11 = plot(sol.t, Fd_array, xlabel = "Time (s)", ylabel = "Fd (N)", title = "Viscous Damping Force")
+p11 = plot(sol.t[230000:end], Fd_array[230000:end], xlabel = "Time (s)", ylabel = "Fd (N)", title = "Viscous Damping Force")
 display(p11)
-p12 = plot(sol.t, Fe_array, xlabel = "Time (s)", ylabel = "Fe (N)", title = "Electrostatic Force")
+p12 = plot(sol.t[230000:end], Fe_array[230000:end], xlabel = "Time (s)", ylabel = "Fe (N)", title = "Electrostatic Force")
 display(p12)
 p13 = plot(sol.t, Fext_input, xlabel = "Time (s)", ylabel = "Fext (N)", title = "Applied External Force")
 display(p13)
@@ -452,7 +455,6 @@ function find_transitions(sol, gp, threshold=1e-7)
  
  # Create plots for each transition
  for (i, t_trans) in enumerate(transition_times)
-    # Get window of data
     t_window, states_window = analyze_transition_window(sol, t_trans)
     
     # Extract state variables

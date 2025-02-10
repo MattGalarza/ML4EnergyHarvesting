@@ -113,7 +113,7 @@ function collision_smoothed(x1, x2, m2, ke, gp, alpha=5e7)
     S = 0.5 * (1 + tanh(alpha * (abs(x2) - gp))) # Smooth transition function
     m2_effective = m2 * (1 + S) # Calculation of mass
     Fcc = ke * (abs(x2) - gp) * sign(x2) * S
-    
+
     # Total force
     Fc = Fnc + Fcc
     return m2_effective, Fc
@@ -183,5 +183,85 @@ plot!(zoom_range, m_smooth_zoom, xlabel = "Displacement (m)", ylabel = "Mass (kg
 vline!([gp], label = "Transition point", linestyle=:dash, color=:red)
 display(p4)
 
-# ---------------------------------------- Electrostatic ------------------------------------
+# ----------------------------------- Electrostatic Coupling --------------------------------
+
+# Electrostatic coupling, Fe
+function electrostatic(x1, x2, Qvar, g0, gp, a, e, ep, cp, wt, wb, ke, E, I, Leff, Tf, Tp, N)
+    # Function for variable capacitance, Cvar
+    function Cvar_func(x2)
+        if abs(x2) < gp # electrodes are NOT in contact
+            crl = (e * ep * Leff * Tf) / Tp
+            # RHS                           
+            Cair_r = ((e * Tf) / (2 * a)) * log((gp - x2 + 2 * a * Leff) / (gp - x2))
+            Cvar_r = 1 / (1/crl + 1/Cair_r + 1/crl)
+            # LHS
+            Cair_l = ((e * Tf) / (2 * a)) * log((gp + x2 + 2 * a * Leff) / (gp + x2))
+            Cvar_l = 1 / (1/crl + 1/Cair_l + 1/crl)
+            # Total variable capacitance, Cvar
+            Cvar_value = (N / 2) * (Cvar_r + Cvar_l)
+        elseif abs(x2) >= gp # electrodes are in contact
+            crl = (e * ep * Leff * Tf) / Tp
+            # d = ((wb - wt) + (abs(x1) - gp)) / Leff
+            # d = (wb - wt) - (((ke * (abs(x2) - gp)) * (Leff^3)) / (3 * E * I))
+            # Colliding electrode
+            Cair_c = ((e * Tf * Leff)/abs(x2)) * (log((2 * Tp + abs(x2))/(2 * Tp)))
+            Cvar_c = 1 / (1/crl + 1/Cair_c + 1/crl)
+            # Non-colliding electrode
+            Cair_nc = ((e * Tf) / (2 * a)) * log((gp + abs(x2) + 2 * a * Leff) / (gp + abs(x2)))
+            Cvar_nc = 1 / (1/crl + 1/Cair_nc + 1/crl)
+            # Total variable capacitance, Cvar
+            Cvar_value = (N / 2) * (Cvar_c + Cvar_nc)
+        end
+        return Cvar_value
+    end
+    # Compute Cvar and its derivative
+    Cvar = Cvar_func(x2)
+    dC = ForwardDiff.derivative(Cvar_func, x2)
+    # Total capacitance, Ctotal
+    Ctotal = Cvar + cp
+    # Electrostatic force, Fe
+    NFe = -((Qvar^2) / (2 * Ctotal^2)) * dC
+    Fe = NFe / (N / 2)
+    return Ctotal, Fe
+end
+
+# Smoothed electrostatic coupling, Fe
+function electrostatic(x1, x2, Qvar, g0, gp, a, e, ep, cp, wt, wb, ke, E, I, Leff, Tf, Tp, N)
+    # Function for variable capacitance, Cvar
+    function Cvar_func(x2)
+        if abs(x2) < gp # electrodes are NOT in contact
+            crl = (e * ep * Leff * Tf) / Tp
+            # RHS                           
+            Cair_r = ((e * Tf) / (2 * a)) * log((gp - x2 + 2 * a * Leff) / (gp - x2))
+            Cvar_r = 1 / (1/crl + 1/Cair_r + 1/crl)
+            # LHS
+            Cair_l = ((e * Tf) / (2 * a)) * log((gp + x2 + 2 * a * Leff) / (gp + x2))
+            Cvar_l = 1 / (1/crl + 1/Cair_l + 1/crl)
+            # Total variable capacitance, Cvar
+            Cvar_value = (N / 2) * (Cvar_r + Cvar_l)
+        elseif abs(x2) >= gp # electrodes are in contact
+            crl = (e * ep * Leff * Tf) / Tp
+            # d = ((wb - wt) + (abs(x1) - gp)) / Leff
+            # d = (wb - wt) - (((ke * (abs(x2) - gp)) * (Leff^3)) / (3 * E * I))
+            # Colliding electrode
+            Cair_c = ((e * Tf * Leff)/abs(x2)) * (log((2 * Tp + abs(x2))/(2 * Tp)))
+            Cvar_c = 1 / (1/crl + 1/Cair_c + 1/crl)
+            # Non-colliding electrode
+            Cair_nc = ((e * Tf) / (2 * a)) * log((gp + abs(x2) + 2 * a * Leff) / (gp + abs(x2)))
+            Cvar_nc = 1 / (1/crl + 1/Cair_nc + 1/crl)
+            # Total variable capacitance, Cvar
+            Cvar_value = (N / 2) * (Cvar_c + Cvar_nc)
+        end
+        return Cvar_value
+    end
+    # Compute Cvar and its derivative
+    Cvar = Cvar_func(x2)
+    dC = ForwardDiff.derivative(Cvar_func, x2)
+    # Total capacitance, Ctotal
+    Ctotal = Cvar + cp
+    # Electrostatic force, Fe
+    NFe = -((Qvar^2) / (2 * Ctotal^2)) * dC
+    Fe = NFe / (N / 2)
+    return Ctotal, Fe
+end
 
