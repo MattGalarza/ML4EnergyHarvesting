@@ -105,7 +105,7 @@ function collision(x1, x2, m2, ke, gp)
 end
 
 # Smoothed electrode collision force, Fc
-function collision_smoothed(x1, x2, m2, ke, gp, alpha=1e6)
+function collision_smoothed(x1, x2, m2, ke, gp, alpha=5e7)
     # Non-collision restoring force
     Fnc = -ke * (x1 - x2)
 
@@ -120,7 +120,7 @@ function collision_smoothed(x1, x2, m2, ke, gp, alpha=1e6)
 end
 
 # Create a range difference for collision
-x1_collision = range(-1.367e-5, 1.367e-5, length = 10000)
+x1_collision = range(-1.5e-5, 1.5e-5, length = 10000)
 
 # Calculate forces and masses for both smoothed and non-smoothed
 Fc = Float64[]
@@ -138,36 +138,10 @@ for i in 1:length(x2_range)
     push!(m_smooth, mass_smooth)
 end
 
-# Plot both smoothed and non-smooth forces
-p3 = plot(x2_range, Fc, xlabel = "Displacement (m)", ylabel = "Force (N)", title = "Fc vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
-plot!(x2_range, Fc_smooth, xlabel = "Displacement (m)", ylabel = "Force (N)", label = "Smoothed", linewidth=2) # linestyle=:dash
-vline!([-gss, gss], label = "Transition point", linestyle=:dash, color=:red)
-display(p3)
-
-# Plot both smoothed and non-smooth forces
-p4 = plot(x2_range, m, xlabel = "Displacement (m)", ylabel = "Mass (kg)", title = "Mass vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
-plot!(x2_range, m_smooth, xlabel = "Displacement (m)", ylabel = "Mass (kg)", label = "Smoothed", linewidth=2) # linestyle=:dash
-vline!([-gss, gss], label = "Transition point", linestyle=:dash, color=:red)
-display(p4)
-
-
-
-# Plot both smoothed and non-smooth forces (close up)
-zoom_range = range(-gss-0.5e-6, -gss+0.5e-6, length = 500)
-Fs_zoom = [spring(x1, k1, k3, gss, kss) for x1 in zoom_range]
-Fs_smoothed_zoom = [spring_smoothed(x1, k1, k3, gss, kss) for x1 in zoom_range]
-p2 = plot(zoom_range, Fs_zoom, xlabel = "Displacement (m)", ylabel = "Force (N)", title = "Fs vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
-plot!(zoom_range, Fs_smoothed_zoom, xlabel = "Displacement (m)", ylabel = "Force (N)", label = "Smoothed", linewidth=2) # linestyle=:dash
-vline!([-gss], label = "Transition point", linestyle=:dash, color=:red)
-display(p2)
-
-
-
-# Create zoom range around transition point
+# Calculate forces and masses for both smoothed and non-smoothed (close up)
 zoom_points = 500
 zoom_width = 0.5e-6  # Width of zoom window on each side
-zoom_range = range(gp-zoom_width, gp+zoom_width, length=zoom_points)
-x1_zoom = range(-1.367e-5, 1.367e-5, length=zoom_points)
+zoom_range = range(gp - zoom_width, gp + zoom_width, length = zoom_points)
 
 # Calculate zoom range forces
 Fc_zoom = Float64[]
@@ -176,8 +150,8 @@ Fc_smooth_zoom = Float64[]
 m_smooth_zoom = Float64[]
 
 for i in 1:length(zoom_range)
-    mass, force = collision(x1_zoom[i], zoom_range[i], m2, ke, gp)
-    mass_smooth, force_smooth = collision_smoothed(x1_zoom[i], zoom_range[i], m2, ke, gp)
+    mass, force = collision(zoom_range[i], zoom_range[i], m2, ke, gp)
+    mass_smooth, force_smooth = collision_smoothed(zoom_range[i], zoom_range[i], m2, ke, gp)
     
     push!(Fc_zoom, force)
     push!(m_zoom, mass)
@@ -185,4 +159,29 @@ for i in 1:length(zoom_range)
     push!(m_smooth_zoom, mass_smooth)
 end
 
+# Plot both smoothed and non-smooth forces
+p3 = plot(x2_range, Fc, xlabel = "Displacement (m)", ylabel = "Force (N)", title = "Fc vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
+plot!(x2_range, Fc_smooth, xlabel = "Displacement (m)", ylabel = "Force (N)", label = "Smoothed", linewidth=2) # linestyle=:dash
+vline!([-gss, gss], label = "Transition point", linestyle=:dash, color=:red)
+display(p3)
+
+# Plot both smoothed and non-smooth forces (close up)
+p4 = plot(zoom_range, Fc_zoom, xlabel = "Displacement (m)", ylabel = "Force (N)", title = "Fc vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
+plot!(zoom_range, Fc_smooth_zoom, xlabel = "Displacement (m)", ylabel = "Force (N)", label = "Smoothed", linewidth=2) # linestyle=:dash
+vline!([gp], label = "Transition point", linestyle=:dash, color=:red)
+display(p4)
+
+# Plot both smoothed and non-smooth masses
+p5 = plot(x2_range, m, xlabel = "Displacement (m)", ylabel = "Mass (kg)", title = "Mass vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
+plot!(x2_range, m_smooth, xlabel = "Displacement (m)", ylabel = "Mass (kg)", label = "Smoothed", linewidth=2) # linestyle=:dash
+vline!([-gss, gss], label = "Transition point", linestyle=:dash, color=:red)
+display(p5)
+
+# Plot both smoothed and non-smooth masses (close up)
+p4 = plot(zoom_range, m_zoom, xlabel = "Displacement (m)", ylabel = "Mass (kg)", title = "Mass vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
+plot!(zoom_range, m_smooth_zoom, xlabel = "Displacement (m)", ylabel = "Mass (kg)", label = "Smoothed", linewidth=2) # linestyle=:dash
+vline!([gp], label = "Transition point", linestyle=:dash, color=:red)
+display(p4)
+
+# ---------------------------------------- Electrostatic ------------------------------------
 
