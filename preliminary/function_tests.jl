@@ -73,7 +73,7 @@ end
 
 # Calculate spring force for smoothed and non-smoothed
 Fs = [spring(x1, k1, k3, gss, kss) for x1 in x1_range]
-Fs_smoothed = [spring_smoothed(x1, k1, k3, gss, kss) for x1 in x1_range]
+Fs_smoothed1 = [spring_smoothed(x1, k1, k3, gss, kss) for x1 in x1_range]
 
 # Plot both smoothed and non-smooth forces
 p1 = plot(x1_range, Fs, xlabel = "Displacement (m)", ylabel = "Force (N)", title = "Fs vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
