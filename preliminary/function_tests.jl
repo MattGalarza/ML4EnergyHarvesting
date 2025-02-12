@@ -77,7 +77,7 @@ Fs_smoothed = [spring_smoothed(x1, k1, k3, gss, kss) for x1 in x1_range]
 
 # Plot both smoothed and non-smooth forces
 p1 = plot(x1_range, Fs, xlabel = "Displacement (m)", ylabel = "Force (N)", title = "Fs vs Displacement: Original vs Smoothed", label = "Original", linewidth=2)
-plot!(x1_range, Fs_smoothed, xlabel = "Displacement (m)", ylabel = "Force (N)", label = "Smoothed", linewidth=2) # linestyle=:dash
+plot!(x1_rang1e, Fs_smoothed, xlabel = "Displacement (m)", ylabel = "Force (N)", label = "Smoothed", linewidth=2) # linestyle=:dash
 vline!([-gss, gss], label = "Transition point", linestyle=:dash, color=:red)
 display(p1)
 
