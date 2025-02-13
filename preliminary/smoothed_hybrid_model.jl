@@ -77,106 +77,20 @@ function spring(x1, k1, k3, gss, kss, alpha=1e7)
     return Fs
 end
 
-# Electrode collision force, Fc
-function collision(x1, x2, m2, ke, gp, alpha=5e7)
-    # Non-collision restoring force
-    Fnc = -ke * (x1 - x2)
-
-    # Contact collision force
-    S = 0.5 * (1 + tanh(alpha * (abs(x2) - gp))) # Smooth transition function
-    m2_effective = m2 * (1 + S) # Calculation of mass
-    Fcc = ke * (abs(x2) - gp) * sign(x2) * S
-
-    # Total force
-    Fc = Fnc + Fcc
-    return m2_effective, Fc
-end
-
-# Viscous damping, Fd
-function damping(x2, x2dot, a, c, gp, Leff, Tf, eta)  
-    # Damping LHS
-    ul = gp + x2
-    ll = ul + a * Leff
-    A1_l = -ul * Leff / (ul + 2 * a) * x2dot
-    A2_l = 12 * eta * a^-2 / (2 * ul + a * Leff) * x2dot
-    Fd_l = Tf * (Leff * A2_l - 6 * eta * Leff / a / ul / ll * A1_l + 
-                6 * eta * Leff * a^-4 / ll * x2dot + 
-                12 * eta * a^-3 * x2dot * log(abs(ul / ll)))
-    
-    # Damping RHS
-    ur = gp - x2
-    lr = ur + a * Leff
-    A1_r = -ur * Leff / (ur + 2 * a) * x2dot
-    A2_r = 12 * eta * a^-2 / (2 * ur + a * Leff) * x2dot
-    Fd_r = Tf * (Leff * A2_r - 6 * eta * Leff / a / ur / lr * A1_r + 
-                6 * eta * Leff * a^-4 / lr * x2dot - 
-                12 * eta * a^-3 * x2dot * log(abs(ur / lr)))
-    
-    # Total damping
-    Fd = -c * (Fd_l + Fd_r)
-    return Fd
-end
-
-# Electrostatic coupling, Fe
-function electrostatic(x1, x2, Qvar, g0, gp, a, e, ep, cp, wt, wb, ke, E, I, Leff, Tf, Tp, N)
-    # Function for variable capacitance, Cvar
-    function Cvar_func(x2)
-        if abs(x2) < gp # electrodes are NOT in contact
-            crl = (e * ep * Leff * Tf) / Tp
-            # RHS                           
-            Cair_r = ((e * Tf) / (2 * a)) * log((gp - x2 + 2 * a * Leff) / (gp - x2))
-            Cvar_r = 1 / (1/crl + 1/Cair_r + 1/crl)
-            # LHS
-            Cair_l = ((e * Tf) / (2 * a)) * log((gp + x2 + 2 * a * Leff) / (gp + x2))
-            Cvar_l = 1 / (1/crl + 1/Cair_l + 1/crl)
-            # Total variable capacitance, Cvar
-            Cvar_value = (N / 2) * (Cvar_r + Cvar_l)
-        elseif abs(x2) >= gp # electrodes are in contact
-            crl = (e * ep * Leff * Tf) / Tp
-            # d = ((wb - wt) + (abs(x1) - gp)) / Leff
-            # d = (wb - wt) - (((ke * (abs(x2) - gp)) * (Leff^3)) / (3 * E * I))
-            # Colliding electrode
-            Cair_c = ((e * Tf * Leff)/abs(x2)) * (log((2 * Tp + abs(x2))/(2 * Tp)))
-            Cvar_c = 1 / (1/crl + 1/Cair_c + 1/crl)
-            # Non-colliding electrode
-            Cair_nc = ((e * Tf) / (2 * a)) * log((gp + abs(x2) + 2 * a * Leff) / (gp + abs(x2)))
-            Cvar_nc = 1 / (1/crl + 1/Cair_nc + 1/crl)
-            # Total variable capacitance, Cvar
-            Cvar_value = (N / 2) * (Cvar_c + Cvar_nc)
-        end
-        return Cvar_value
-    end
-    # Compute Cvar and its derivative
-    Cvar = Cvar_func(x2)
-    dC = ForwardDiff.derivative(Cvar_func, x2)
-    # Total capacitance, Ctotal
-    Ctotal = Cvar + cp
-    # Electrostatic force, Fe
-    NFe = -((Qvar^2) / (2 * Ctotal^2)) * dC
-    Fe = NFe / (N / 2)
-    return Ctotal, Fe
-end
-
 function CoupledSystem!(dz, z, p, t, current_acceleration)
     # Unpack state variables
-    z1, z2, z3, z4, z5, Vout = z
+    z1, z2 = z
 
     # Compute forces
     Fs = spring(z1, p.k1, p.k3, p.gss, p.kss)
-    m2, Fc = collision(z1, z3, p.m2, p.ke, p.gp)
-    Fd = damping(z3, z4, p.a, p.c, p.gp, p.Leff, p.Tf, p.eta)
-    Ctotal, Fe = electrostatic(z1, z3, z5, p.g0, p.gp, p.a, p.e, p.ep, p.cp, p.wt, p.wb, p.ke, p.E, p.I, p.Leff, p.Tf, p.Tp, p.N)
 
     # Use current_acceleration as the external force
     Fext = current_acceleration
 
     # Compute derivatives
     dz[1] = z2
-    dz[2] = (Fs) / p.m1 - Fext  # + (p.N / 2) * Fc
-    dz[3] = z4
-    dz[4] = (-Fc + Fd + Fe) / m2
-    dz[5] = (p.Vbias - (z5 / Ctotal)) / p.Rload
-    dz[6] = (p.Vbias - (z5 / Ctotal) - Vout) / (p.Rload * Ctotal)
+    dz[2] = (Fs) / p.m1 - Fext 
+
 end
 end
 
@@ -225,18 +139,7 @@ x10dot = 0.0 # Initial velocity
 x20 = 0.0 # Initial displacement
 x20dot = 0.0 # Initial velocity
 
-# Compute initial electrostatic parameters
-Ctotal0, Fe0 = AnalyticalModel.electrostatic(
-    x10, x20, 0.0, 
-    p_new.g0, p_new.gp, p_new.a, 
-    p_new.e, p_new.ep, p_new.cp, 
-    p_new.wt, p_new.wb, p_new.ke, 
-    p_new.E, p_new.I, p_new.Leff, 
-    p_new.Tf, p_new.Tp, p_new.N
-)
-Q0 = p_new.Vbias * Ctotal0 # Initial charge
-Vout0 = p_new.Vbias - (Q0 / Ctotal0) # Initial voltage
-z0 = [x10, x10dot, x20, x20dot, Q0, Vout0]
+z0 = [x10, x10dot]
 tspan = (0.0, 0.5) # simulation length
 # teval = () # evaluation steps
 abstol = 1e-9 # absolute solver tolerance
@@ -269,65 +172,172 @@ println("Solver status: ", sol.retcode)
 # Plot the related terms
 x1 = [u[1] for u in sol.u]
 x1dot = [u[2] for u in sol.u]
-x2 = [u[3] for u in sol.u]
-x2dot = [u[4] for u in sol.u]
-Qvar = [u[5] for u in sol.u]
-V = [u[6] for u in sol.u]
 
-p3 = plot(sol.t[230000:end], x1[230000:end], xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Mass Displacement (x1)")
+p3 = plot(sol.t, x1, xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Mass Displacement (x1)")
 display(p3)
-p4 = plot(sol.t[230000:end], x1dot[230000:end], xlabel = "Time (s)", ylabel = "x1dot (m/s)", title = "Shuttle Mass Velocity (x1dot)")
+p4 = plot(sol.t, x1dot, xlabel = "Time (s)", ylabel = "x1dot (m/s)", title = "Shuttle Mass Velocity (x1dot)")
 display(p4)
-p5 = plot(sol.t[230000:end], x2[230000:end], xlabel = "Time (s)", ylabel = "x2 (m)", title = "Mobile Electrode Displacement (x2)")
-display(p5)
-p6 = plot(sol.t[230000:end], x2dot[230000:end], xlabel = "Time (s)", ylabel = "x2dot (m/s)", title = "Mobile Electrode Velocity (x2)")
-display(p6)
-p7 = plot(sol.t[230000:end], Qvar[230000:end], xlabel = "Time (s)", ylabel = "Qvar (C)", title = "Charge (Qvar)")
-display(p7)
-p8 = plot(sol.t[230000:end], V[230000:end], xlabel = "Time (s)", ylabel = "Vout (V)", title = "Output Voltage")
-display(p8)
 
 # Generate forces during the simulation
 # Initialize arrays to store forces
 Fs_array = Float64[] # Suspension spring force
 Fc_array = Float64[] # Collision force
-Fd_array = Float64[] # Damping force
-Fe_array = Float64[] # Electrostatic force
 
 # Iterate over each solution point to compute forces
 for (i, t) in enumerate(sol.t)
     # Extract state variables at time t
     z = sol.u[i]
-    z1, z2, z3, z4, z5, Vout = z
+    z1, z2 = z
     
     # Compute Fs (Suspension spring force)
     Fs = AnalyticalModel.spring(z1, p_new.k1, p_new.k3, p_new.gss, p_new.kss)
     push!(Fs_array, Fs)
-    
-    # Compute Fc (Collision force)
-    m2_val, Fc = AnalyticalModel.collision(z1, z3, p_new.m2, p_new.ke, p_new.gp)
-    push!(Fc_array, Fc)
-    
-    # Compute Fd (Damping force)
-    Fd = AnalyticalModel.damping(z3, z4, p_new.a, p_new.c, p_new.gp, p_new.Leff, p_new.Tf, p_new.eta)
-    push!(Fd_array, Fd)
-    
-    # Compute Fe (Electrostatic force)
-    Ctotalx, Fe = AnalyticalModel.electrostatic(z1, z3, z5, p_new.g0, p_new.gp, p_new.a, 
-                                            p_new.e, p_new.ep, p_new.cp, p_new.wt, 
-                                            p_new.wb, p_new.ke, p_new.E, p_new.I, 
-                                            p_new.Leff, p_new.Tf, p_new.Tp, p_new.N)
-    push!(Fe_array, Fe)
 end
 
 # Plotting respective forces
-p9 = plot(sol.t[230000:end], Fs_array[230000:end], xlabel = "Time (s)", ylabel = "Fs (N)", title = "Suspension + Soft-stopper Spring Force")
+p9 = plot(sol.t, Fs_array, xlabel = "Time (s)", ylabel = "Fs (N)", title = "Suspension + Soft-stopper Spring Force")
 display(p9)
-p10 = plot(sol.t[230000:end], Fc_array[230000:end], xlabel = "Time (s)", ylabel = "Fc (N)", title = "Mobile Electrode Collision Force")
-display(p10)
-p11 = plot(sol.t[230000:end], Fd_array[230000:end], xlabel = "Time (s)", ylabel = "Fd (N)", title = "Viscous Damping Force")
-display(p11)
-p12 = plot(sol.t[230000:end], Fe_array[230000:end], xlabel = "Time (s)", ylabel = "Fe (N)", title = "Electrostatic Force")
-display(p12)
-p13 = plot(sol.t, Fext_input, xlabel = "Time (s)", ylabel = "Fext (N)", title = "Applied External Force")
-display(p13)
+
+
+
+
+# Function to find transition points with threshold
+function find_transitions(sol, gp, threshold=1e-7)
+    transition_points = Float64[]
+    transition_indices = Int[]
+    
+    for i in 2:length(sol.t)
+        gap_prev = p_new.gp - abs(sol.u[i-1][3])
+        gap_curr = p_new.gp - abs(sol.u[i][3])
+        
+        if (gap_prev > threshold && gap_curr <= threshold) || 
+           (gap_prev <= threshold && gap_curr > threshold)
+            push!(transition_points, sol.t[i])
+            push!(transition_indices, i)
+        end
+    end
+    return transition_points, transition_indices
+ end
+ 
+ # Function to analyze window around transition
+ function analyze_transition_window(sol, t_transition, window_size=0.001)
+    window_indices = findall(t -> abs(t - t_transition) <= window_size, sol.t)
+    t_window = sol.t[window_indices]
+    states_window = sol.u[window_indices]
+    return t_window, states_window
+ end
+ 
+ # Function to calculate all forces
+ function calculate_all_forces(z, p)
+    z1, z2, z3, z4 = z
+    
+    Fs = AnalyticalModel.spring(z1, p.k1, p.k3, p.gss, p.kss)
+    _, Fc = AnalyticalModel.collision(z1, z3, p.m2, p.ke, p.gp)
+    return Fs, Fc
+ end
+ 
+ # Plot gap distance over time
+ gap_distance = [p_new.gp - abs(u[3]) for u in sol.u]
+ p_gap = plot(sol.t, gap_distance,
+             xlabel="Time (s)",
+             ylabel="Gap Distance (m)",
+             title="Electrode Gap Distance")
+ hline!([0.0], label="Contact threshold", linestyle=:dash, color=:red)
+ display(p_gap)
+ 
+ # Find transitions
+ transition_times, transition_idx = find_transitions(sol, p_new.gp)
+ println("Found $(length(transition_times)) transitions at times: ", transition_times)
+ 
+ # Create plots for each transition
+ for (i, t_trans) in enumerate(transition_times)
+    t_window, states_window = analyze_transition_window(sol, t_trans)
+    
+    # Extract state variables
+    x1_window = [s[1] for s in states_window]
+    x1dot_window = [s[2] for s in states_window]
+    x2_window = [s[3] for s in states_window]
+    x2dot_window = [s[4] for s in states_window]
+    
+    # Determine if we're in positive or negative region
+    mean_x2 = mean(x2_window)
+    gp_threshold = mean_x2 > 0 ? p_new.gp : -p_new.gp
+    
+    # Calculate forces
+    forces_window = [calculate_all_forces(s, p_new) for s in states_window]
+    
+    # Phase space plot
+    p_phase = plot(x2_window, x2dot_window,
+                  xlabel="x2 (m)",
+                  ylabel="x2dot (m/s)",
+                  title="Phase Portrait Around Transition $i (t=$(round(t_trans, digits=4)))",
+                  marker=:circle,
+                  markersize=2)
+    vline!([p_new.gp], label="gp threshold", linestyle=:dash, color=:red)
+    display(p_phase)
+    
+    # Positions plot
+    p_pos = plot(t_window .- t_trans,
+                [x1_window x2_window],
+                label=["x1" "x2"],
+                xlabel="Time from transition (s)",
+                ylabel="Position (m)",
+                title="Positions Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    hline!([gp_threshold], label="gp threshold", linestyle=:dash, color=:red)
+    display(p_pos)
+    
+    # Velocities plot
+    p_vel = plot(t_window .- t_trans,
+                [x1dot_window x2dot_window],
+                label=["x1dot" "x2dot"],
+                xlabel="Time from transition (s)",
+                ylabel="Velocity (m/s)",
+                title="Velocities Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    display(p_vel)
+    
+    # Individual force plots
+    p_fs = plot(t_window .- t_trans,
+               [f[1] for f in forces_window],
+               label="Fs",
+               xlabel="Time from transition (s)",
+               ylabel="Force (N)",
+               title="Spring Force Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    display(p_fs)
+    
+    p_fc = plot(t_window .- t_trans,
+               [f[2] for f in forces_window],
+               label="Fc",
+               xlabel="Time from transition (s)",
+               ylabel="Force (N)",
+               title="Collision Force Around Transition $i")
+    vline!([0], label="Transition point", linestyle=:dash, color=:red)
+    display(p_fc)
+    
+    # Calculate and display metrics
+    dt = diff(t_window)
+    dx2 = diff(x2_window)
+    dx2dot = diff(x2dot_window)
+    
+    println("\nTransition $i Analysis (t = $(round(t_trans, digits=4))):")
+    println("Max dx2/dt: ", maximum(abs.(dx2 ./ dt)))
+    println("Max dx2dot/dt: ", maximum(abs.(dx2dot ./ dt)))
+    println("Gap at transition: ", p_new.gp - abs(x2_window[length(x2_window)÷2]))
+ end
+ 
+ # Print min/max gap values for debugging
+ println("\nGap Analysis:")
+ println("Min gap: ", minimum(gap_distance))
+ println("Max gap: ", maximum(gap_distance))
+ println("gp value: ", p_new.gp)
+ 
+ # Plot gap histogram to see distribution
+ histogram(gap_distance, 
+          bins=100,
+          xlabel="Gap Distance (m)",
+          ylabel="Count",
+          title="Distribution of Gap Distances")
+ display(current())
+return 
