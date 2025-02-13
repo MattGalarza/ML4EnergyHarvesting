@@ -176,7 +176,7 @@ function CoupledSystem!(dz, z, p, t, current_acceleration)
 
     # Compute derivatives
     dz[1] = z2
-    dz[2] = (Fs) / p.m1 - Fext  # + (p.N / 2) * Fc
+    dz[2] = (Fs + (p.N / 2) * Fc) / p.m1 - Fext
     dz[3] = z4
     dz[4] = (-Fc + Fd + Fe) / m2
     dz[5] = (p.Vbias - (z5 / Ctotal)) / p.Rload
