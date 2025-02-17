@@ -185,7 +185,7 @@ display(p6)
 # Generate forces during the simulation
 # Initialize arrays to store forces
 Fs_array = Float64[] # Suspension spring force
-Fc_array = Float64[] # Collision force
+Fc_array = Float64[] # Collision foce
 
 # Iterate over each solution point to compute forces
 for (i, t) in enumerate(sol.t)
