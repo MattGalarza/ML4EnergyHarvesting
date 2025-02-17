@@ -63,7 +63,7 @@ end
 p = Params{Float64}()
 
 # Suspension spring force, Fs
-function spring(x1, k1, k3, gss, kss, alpha=1e7)
+function spring(x1, k1, k3, gss, kss, alpha=1e6)
     # Suspension beam force
     # Fsp = - k1 * x1 - k3 * (x1^3) 
     Fsp = -k1 * x1 
@@ -89,7 +89,7 @@ function CoupledSystem!(dz, z, p, t, current_acceleration)
 
     # Compute derivatives
     dz[1] = z2
-    dz[2] = (Fs) / p.m1 - Fext 
+    dz[2] = (Fs - 0.005*z2) / p.m1 - Fext 
 
 end
 end
@@ -177,11 +177,15 @@ p3 = plot(sol.t, x1, xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Ma
 display(p3)
 p4 = plot(sol.t, x1dot, xlabel = "Time (s)", ylabel = "x1dot (m/s)", title = "Shuttle Mass Velocity (x1dot)")
 display(p4)
+p5 = plot(sol.t[130000:end], x1[130000:end], xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Mass Displacement (x1)")
+display(p5)
+p6 = plot(sol.t[130000:end], x1dot[130000:end], xlabel = "Time (s)", ylabel = "x1dot (m/s)", title = "Shuttle Mass Velocity (x1dot)")
+display(p6)
 
 # Generate forces during the simulation
 # Initialize arrays to store forces
 Fs_array = Float64[] # Suspension spring force
-Fc_array = Float64[] # Collision force
+Fc_array = Float64[] # Collision forc
 
 # Iterate over each solution point to compute forces
 for (i, t) in enumerate(sol.t)
@@ -197,109 +201,102 @@ end
 # Plotting respective forces
 p9 = plot(sol.t, Fs_array, xlabel = "Time (s)", ylabel = "Fs (N)", title = "Suspension + Soft-stopper Spring Force")
 display(p9)
+p10 = plot(sol.t[130000:end], Fs_array[130000:end], xlabel = "Time (s)", ylabel = "Fs (N)", title = "Suspension + Soft-stopper Spring Force")
+display(p10)
 
+p5 = plot(sol.t[132500:142000], x1[132500:142000], xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Mass Displacement (x1)")
+plot!(sol.t[132500:142000], Fs_array[132500:142000])
+hline!([-p_new.gss], label="Contact threshold", linestyle=:dash, color=:red)
+display(p5)
 
+p5 = plot(sol.t[132500:142000], x1[132500:142000], xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Mass Displacement (x1)")
+display(p5)
 
 
 # Function to find transition points with threshold
-function find_transitions(sol, gp, threshold=1e-7)
+function find_transitions(sol, gss, threshold=1e-7)
     transition_points = Float64[]
     transition_indices = Int[]
     
     for i in 2:length(sol.t)
-        gap_prev = p_new.gp - abs(sol.u[i-1][3])
-        gap_curr = p_new.gp - abs(sol.u[i][3])
+        prev_beyond = abs(sol.u[i-1][1]) > (gss - threshold)
+        curr_beyond = abs(sol.u[i][1]) > (gss - threshold)
         
-        if (gap_prev > threshold && gap_curr <= threshold) || 
-           (gap_prev <= threshold && gap_curr > threshold)
+        if prev_beyond != curr_beyond
             push!(transition_points, sol.t[i])
             push!(transition_indices, i)
         end
     end
     return transition_points, transition_indices
- end
- 
- # Function to analyze window around transition
- function analyze_transition_window(sol, t_transition, window_size=0.001)
+end
+
+# Function to analyze window around transition
+function analyze_transition_window(sol, t_transition, window_size=0.001)
     window_indices = findall(t -> abs(t - t_transition) <= window_size, sol.t)
     t_window = sol.t[window_indices]
     states_window = sol.u[window_indices]
     return t_window, states_window
- end
- 
- # Function to calculate all forces
- function calculate_all_forces(z, p)
-    z1, z2, z3, z4 = z
-    
-    Fs = AnalyticalModel.spring(z1, p.k1, p.k3, p.gss, p.kss)
-    _, Fc = AnalyticalModel.collision(z1, z3, p.m2, p.ke, p.gp)
-    return Fs, Fc
- end
- 
- # Plot gap distance over time
- gap_distance = [p_new.gp - abs(u[3]) for u in sol.u]
- p_gap = plot(sol.t, gap_distance,
-             xlabel="Time (s)",
-             ylabel="Gap Distance (m)",
-             title="Electrode Gap Distance")
- hline!([0.0], label="Contact threshold", linestyle=:dash, color=:red)
- display(p_gap)
- 
- # Find transitions
- transition_times, transition_idx = find_transitions(sol, p_new.gp)
- println("Found $(length(transition_times)) transitions at times: ", transition_times)
- 
- # Create plots for each transition
- for (i, t_trans) in enumerate(transition_times)
+end
+
+# Calculate gap distance relative to soft-stopper
+gap_distance = [p_new.gss - abs(u[1]) for u in sol.u]
+p_gap = plot(sol.t, gap_distance,
+            xlabel="Time (s)",
+            ylabel="Gap Distance (m)",
+            title="Distance to Soft-stopper")
+hline!([0.0], label="Contact threshold", linestyle=:dash, color=:red)
+display(p_gap)
+
+# Find transitions
+transition_times, transition_idx = find_transitions(sol, p_new.gss)
+println("Found $(length(transition_times)) transitions at times: ", transition_times)
+
+# Analyze each transition
+for (i, t_trans) in enumerate(transition_times)
     t_window, states_window = analyze_transition_window(sol, t_trans)
     
     # Extract state variables
     x1_window = [s[1] for s in states_window]
     x1dot_window = [s[2] for s in states_window]
-    x2_window = [s[3] for s in states_window]
-    x2dot_window = [s[4] for s in states_window]
     
-    # Determine if we're in positive or negative region
-    mean_x2 = mean(x2_window)
-    gp_threshold = mean_x2 > 0 ? p_new.gp : -p_new.gp
-    
-    # Calculate forces
-    forces_window = [calculate_all_forces(s, p_new) for s in states_window]
+    # Calculate forces for this window
+    Fs_window = [AnalyticalModel.spring(s[1], p_new.k1, p_new.k3, p_new.gss, p_new.kss) 
+                 for s in states_window]
     
     # Phase space plot
-    p_phase = plot(x2_window, x2dot_window,
-                  xlabel="x2 (m)",
-                  ylabel="x2dot (m/s)",
+    p_phase = plot(x1_window, x1dot_window,
+                  xlabel="x1 (m)",
+                  ylabel="x1dot (m/s)",
                   title="Phase Portrait Around Transition $i (t=$(round(t_trans, digits=4)))",
                   marker=:circle,
                   markersize=2)
-    vline!([p_new.gp], label="gp threshold", linestyle=:dash, color=:red)
+    vline!([p_new.gss, -p_new.gss], label="±gss threshold", linestyle=:dash, color=:red)
     display(p_phase)
     
     # Positions plot
     p_pos = plot(t_window .- t_trans,
-                [x1_window x2_window],
-                label=["x1" "x2"],
+                x1_window,
+                label="x1",
                 xlabel="Time from transition (s)",
                 ylabel="Position (m)",
-                title="Positions Around Transition $i")
+                title="Position Around Transition $i")
     vline!([0], label="Transition point", linestyle=:dash, color=:red)
-    hline!([gp_threshold], label="gp threshold", linestyle=:dash, color=:red)
+    hline!([p_new.gss, -p_new.gss], label="±gss threshold", linestyle=:dash, color=:red)
     display(p_pos)
     
     # Velocities plot
     p_vel = plot(t_window .- t_trans,
-                [x1dot_window x2dot_window],
-                label=["x1dot" "x2dot"],
+                x1dot_window,
+                label="x1dot",
                 xlabel="Time from transition (s)",
                 ylabel="Velocity (m/s)",
                 title="Velocities Around Transition $i")
     vline!([0], label="Transition point", linestyle=:dash, color=:red)
     display(p_vel)
     
-    # Individual force plots
+    # Spring force plot
     p_fs = plot(t_window .- t_trans,
-               [f[1] for f in forces_window],
+               Fs_window,
                label="Fs",
                xlabel="Time from transition (s)",
                ylabel="Force (N)",
@@ -307,37 +304,27 @@ function find_transitions(sol, gp, threshold=1e-7)
     vline!([0], label="Transition point", linestyle=:dash, color=:red)
     display(p_fs)
     
-    p_fc = plot(t_window .- t_trans,
-               [f[2] for f in forces_window],
-               label="Fc",
-               xlabel="Time from transition (s)",
-               ylabel="Force (N)",
-               title="Collision Force Around Transition $i")
-    vline!([0], label="Transition point", linestyle=:dash, color=:red)
-    display(p_fc)
-    
     # Calculate and display metrics
     dt = diff(t_window)
-    dx2 = diff(x2_window)
-    dx2dot = diff(x2dot_window)
+    dx1 = diff(x1_window)
+    dx1dot = diff(x1dot_window)
     
     println("\nTransition $i Analysis (t = $(round(t_trans, digits=4))):")
-    println("Max dx2/dt: ", maximum(abs.(dx2 ./ dt)))
-    println("Max dx2dot/dt: ", maximum(abs.(dx2dot ./ dt)))
-    println("Gap at transition: ", p_new.gp - abs(x2_window[length(x2_window)÷2]))
- end
- 
- # Print min/max gap values for debugging
- println("\nGap Analysis:")
- println("Min gap: ", minimum(gap_distance))
- println("Max gap: ", maximum(gap_distance))
- println("gp value: ", p_new.gp)
- 
- # Plot gap histogram to see distribution
- histogram(gap_distance, 
-          bins=100,
-          xlabel="Gap Distance (m)",
-          ylabel="Count",
-          title="Distribution of Gap Distances")
- display(current())
-return 
+    println("Max dx1/dt: ", maximum(abs.(dx1 ./ dt)))
+    println("Max dx1dot/dt: ", maximum(abs.(dx1dot ./ dt)))
+    println("Gap at transition: ", p_new.gss - abs(x1_window[length(x1_window)÷2]))
+end
+
+# Print min/max gap values
+println("\nGap Analysis:")
+println("Min gap: ", minimum(gap_distance))
+println("Max gap: ", maximum(gap_distance))
+println("gss value: ", p_new.gss)
+
+# Plot gap histogram
+histogram(gap_distance, 
+         bins=100,
+         xlabel="Gap Distance (m)",
+         ylabel="Count",
+         title="Distribution of Gap Distances")
+display(current())
