@@ -47,7 +47,7 @@ export Params, p, electrostatic, CoupledSystem!
     gp::T = :($(g0 - 2 * Tp))                      # Initial gap including parylene layer (m)
     wavg::T = :($((wt + wb) / 2))                  # Average electrode width (m)
     a::T = :($((wb - wt) / Leff))                  # Tilt factor
-    k1::T = :($((4 / 6) * ((E * Tf * (ws^3)) / (Lss^3))))  # Spring constant (N/m)
+    k1::T = :($((4 / 60) * ((E * Tf * (ws^3)) / (Lss^3))))  # Spring constant (N/m)
     k3::T = :($((18 / 25) * ((E * Tf * ws) / (Lss^3))))    # Cubic spring constant (N/m³)
     I::T = :($((1 / 12) * Tf * (wavg^3)))          # Electrode moment of inertia (m⁴)
     m2::T = :($((33 / 140) * rho * Tf * Lff * wavg))  # Mass of electrode (kg)
@@ -198,7 +198,7 @@ end
 
 # Sine Wave External Force
 f = 20.0 # Frequency (Hz)
-alpha = 3.0 # Applied acceleration constant
+alpha = 1.0 # Applied acceleration constant
 g = 9.81 # Gravitational constant 
 A = alpha * g
 t_ramp = 0.2 # Ramp-up duration (s)
@@ -278,17 +278,17 @@ x2dot = [u[4] for u in sol.u]
 Qvar = [u[5] for u in sol.u]
 V = [u[6] for u in sol.u]
 
-p3 = plot(sol.t[230000:end], x1[230000:end], xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Mass Displacement (x1)")
+p3 = plot(sol.t, x1, xlabel = "Time (s)", ylabel = "x1 (m)", title = "Shuttle Mass Displacement (x1)")
 display(p3)
-p4 = plot(sol.t[230000:end], x1dot[230000:end], xlabel = "Time (s)", ylabel = "x1dot (m/s)", title = "Shuttle Mass Velocity (x1dot)")
+p4 = plot(sol.t, x1dot, xlabel = "Time (s)", ylabel = "x1dot (m/s)", title = "Shuttle Mass Velocity (x1dot)")
 display(p4)
-p5 = plot(sol.t[230000:end], x2[230000:end], xlabel = "Time (s)", ylabel = "x2 (m)", title = "Mobile Electrode Displacement (x2)")
+p5 = plot(sol.t, x2, xlabel = "Time (s)", ylabel = "x2 (m)", title = "Mobile Electrode Displacement (x2)")
 display(p5)
-p6 = plot(sol.t[230000:end], x2dot[230000:end], xlabel = "Time (s)", ylabel = "x2dot (m/s)", title = "Mobile Electrode Velocity (x2)")
+p6 = plot(sol.t, x2dot, xlabel = "Time (s)", ylabel = "x2dot (m/s)", title = "Mobile Electrode Velocity (x2)")
 display(p6)
-p7 = plot(sol.t[230000:end], Qvar[230000:end], xlabel = "Time (s)", ylabel = "Qvar (C)", title = "Charge (Qvar)")
+p7 = plot(sol.t, Qvar, xlabel = "Time (s)", ylabel = "Qvar (C)", title = "Charge (Qvar)")
 display(p7)
-p8 = plot(sol.t[230000:end], V[230000:end], xlabel = "Time (s)", ylabel = "Vout (V)", title = "Output Voltage")
+p8 = plot(sol.t, V, xlabel = "Time (s)", ylabel = "Vout (V)", title = "Output Voltage")
 display(p8)
 
 # Generate forces during the simulation
