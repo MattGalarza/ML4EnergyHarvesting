@@ -325,13 +325,13 @@ for (i, t) in enumerate(sol.t)
 end
 
 # Plotting respective forces
-p9 = plot(sol.t[230000:end], Fs_array[230000:end], xlabel = "Time (s)", ylabel = "Fs (N)", title = "Suspension + Soft-stopper Spring Force")
+p9 = plot(sol.t, Fs_array, xlabel = "Time (s)", ylabel = "Fs (N)", title = "Suspension + Soft-stopper Spring Force")
 display(p9)
-p10 = plot(sol.t[230000:end], Fc_array[230000:end], xlabel = "Time (s)", ylabel = "Fc (N)", title = "Mobile Electrode Collision Force")
+p10 = plot(sol.t, Fc_array, xlabel = "Time (s)", ylabel = "Fc (N)", title = "Mobile Electrode Collision Force")
 display(p10)
-p11 = plot(sol.t[230000:end], Fd_array[230000:end], xlabel = "Time (s)", ylabel = "Fd (N)", title = "Viscous Damping Force")
+p11 = plot(sol.t, Fd_array, xlabel = "Time (s)", ylabel = "Fd (N)", title = "Viscous Damping Force")
 display(p11)
-p12 = plot(sol.t[230000:end], Fe_array[230000:end], xlabel = "Time (s)", ylabel = "Fe (N)", title = "Electrostatic Force")
+p12 = plot(sol.t, Fe_array, xlabel = "Time (s)", ylabel = "Fe (N)", title = "Electrostatic Force")
 display(p12)
 p13 = plot(sol.t, Fext_input, xlabel = "Time (s)", ylabel = "Fext (N)", title = "Applied External Force")
 display(p13)
