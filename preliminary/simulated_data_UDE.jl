@@ -175,7 +175,7 @@ function CoupledSystem!(dz, z, p, t, current_acceleration)
     dz[1] = z2
     dz[2] = (Fs + (p.N / 2) * Fc) / p.m1 - Fext
     dz[3] = z4
-    dz[4] = (-Fc + Fd + Fe) / m2 - Fext
+    dz[4] = (-Fc + Fd + Fe) / m2
     dz[5] = (p.Vbias - (z5 / Ctotal)) / p.Rload
     dz[6] = (p.Vbias - z5 / Ctotal - Vout) / (p.Rload * Ctotal)
 end
@@ -514,12 +514,11 @@ end
 # Define the activation function
 rbf(x) = exp.(-(x .^ 2))
 
-# Neural network setup
-const U = Lux.Chain(
-    Lux.Dense(7, 32, rbf),
-    Lux.Dense(32, 32, rbf),
-    Lux.Dense(32, 6)
-)
+const U = Lux.Chain(Lux.Dense(7, 64, rbf), # 7 inputs: 6 states + 1 acceleration
+                    Lux.Dense(64, 64, rbf),
+                    # Lux.Dense(64, 64, rbf),
+                    Lux.Dense(64, 6) # 6 outputs for state corrections
+) 
 
 # Initialize NN
 rng = Random.default_rng()
