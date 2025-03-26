@@ -509,6 +509,15 @@ function ude_dynamics!(du, u, p, t)
     
     # Combine normalized derivatives
     du .= du_model_norm + nn_correction
+
+    # Alternative approach: constrain known states (NOTE: NN output states will need to go from 6 -> 4)
+    #du[1] = u[2]  # x1dot is the derivative of x1 (no correction needed)
+    #du[3] = u[4]  # x2dot is the derivative of x2 (no correction needed)
+    # For other states, use model + neural network corrections
+    #du[2] = du_model_norm[2] + nn_correction[2]  # x1dot'
+    #du[4] = du_model_norm[4] + nn_correction[4]  # x2dot'
+    #du[5] = du_model_norm[5] + nn_correction[5]  # Qvar'
+    #du[6] = du_model_norm[6] + nn_correction[6]  # V'
 end
 
 # Define the activation function
@@ -516,9 +525,9 @@ rbf(x) = exp.(-(x .^ 2))
 
 # Regular deep NN chain
 const U = Lux.Chain(Lux.Dense(7, 64, rbf), # 7 inputs: 6 states + 1 acceleration
-                    Lux.Dense(64, 64, rbf),
                     # Lux.Dense(64, 64, rbf),
-                    Lux.Dense(64, 6) # 6 outputs for state corrections
+                    Lux.Dense(64, 32, rbf),
+                    Lux.Dense(32, 6) # 6 outputs for state corrections
 ) 
 
 # Separate deep NN for each state
