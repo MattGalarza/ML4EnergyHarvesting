@@ -1,8 +1,0 @@
-Transition 13 Analysis
-Time: 0.335828 s
-States before transition:
-x1: 1.260664428518056e-5
-x2: 1.2582279096746118e-5
-States after transition:
-x1: 1.3735352064594805e-5
-x2: 1.3712466894428586e-5

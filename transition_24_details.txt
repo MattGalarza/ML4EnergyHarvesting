@@ -1,8 +1,0 @@
-Transition 24 Analysis
-Time: 0.466483 s
-States before transition:
-x1: -1.3703782024385289e-5
-x2: -1.368778878922964e-5
-States after transition:
-x1: -1.3596666927258934e-5
-x2: -1.3591888174312531e-5

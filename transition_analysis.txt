@@ -1,5 +1,0 @@
-Transition Analysis Results
-========================
-Number of transitions: 0
-
-Transition times:

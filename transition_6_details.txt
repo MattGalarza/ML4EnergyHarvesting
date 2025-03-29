@@ -1,8 +1,0 @@
-Transition 6 Analysis
-Time: 0.241487 s
-States before transition:
-x1: 1.3703757381536657e-5
-x2: 1.3687783119869392e-5
-States after transition:
-x1: 1.359693200913504e-5
-x2: 1.3592193678281894e-5

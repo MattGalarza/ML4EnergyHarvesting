@@ -1,8 +1,0 @@
-Transition 8 Analysis
-Time: 0.266483 s
-States before transition:
-x1: -1.3703782023893451e-5
-x2: -1.3687788788833718e-5
-States after transition:
-x1: -1.3596666927527296e-5
-x2: -1.3591888174565416e-5
