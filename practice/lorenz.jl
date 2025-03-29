@@ -52,6 +52,8 @@ println("Solver status: ", sol.retcode)
 x = [u[1] for u in sol.u]
 y = [u[2] for u in sol.u]
 z = [u[3] for u in sol.u]
+u = sol.u
+t = sol.t
 
 p1 = plot(sol.t, x, xlabel = "t", ylabel = "x")
 display(p1)
@@ -87,22 +89,22 @@ function ude_dynamics!(du, u, p, t)
 end
 
 # Closure with the known parameter
-nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p_)
+nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p)
 # Define the problem
-prob_nn = ODEProblem(nn_dynamics!, Xₙ[:, 1], tspan, p)
+prob_nn = ODEProblem(nn_dynamics!, u[:, 1], tspan, p)
 
 # Prediction function
-function predict(θ, X = Xₙ[:, 1], T = t)
-    _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = θ)
-    Array(solve(_prob, Vern7(), saveat = T,
+function predict(θ, X = u[:, 1], T = t)
+    _prob = remake(prob_nn, u0 = X, tspan, p = θ)
+    Array(solve(_prob, Rosenbrock23(), saveat = T,
         abstol = 1e-6, reltol = 1e-6,
         sensealg = QuadratureAdjoint(autojacvec = ReverseDiffVJP(true))))
 end
 
 # Loss function
 function loss(θ)
-    X̂ = predict(θ)
-    mean(abs2, Xₙ .- X̂)
+    u_pred = predict(θ)
+    mean(abs2, u - u_pred)
 end
 
 # Simple callback
@@ -117,7 +119,7 @@ end
 
 # Optimization setup
 optf = OptimizationFunction((θ, p) -> loss(θ), Optimization.AutoZygote())
-optprob = OptimizationProblem(optf, p_flat)
+optprob = OptimizationProblem(optf, p)
 
 # Start optimization
 println("\nStarting optimization...")
