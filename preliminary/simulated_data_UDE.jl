@@ -545,14 +545,13 @@ nn_params, st = Lux.setup(rng, U)
 const _st = st
 
 # Choose fundamental parameters to optimize
-physical_param_keys = [:m1, :E, :eta, :c, :g0, :Tp, :Tf, :gss, :rho, :cp, :wt, :wb, :ws, 
-                        :Lss, :Lff, :Leff, :e, :ep, :Vbias, :Rload, :N, :kss]  
+physical_param_keys = [:m1, :E, :eta, :c, :g0, :Tp, :Tf, :gss, :rho, :cp, :wt, :wb, :ws, :Lss, :Lff, :Leff, :e, :ep, :Vbias, :Rload, :N, :kss]  
 n_physical = length(physical_param_keys)
 p_physical = Float64[getfield(p_modified, key) for key in physical_param_keys]
 
 # Convert parameters to a flat vector
 p_neural = ComponentArray(nn_params)
-p_combined = [p_physical; p_neural]  # Physical parameters + NN parameters
+p_combined = vcat(p_physical, p_neural)  # Physical parameters + NN parameters
 
 # Define the problem
 prob_nn = ODEProblem(ude_dynamics!, u0_norm, tspan, p_combined)
@@ -596,7 +595,7 @@ optprob = OptimizationProblem(optf, p_combined)
 
 # Start optimization
 println("\nStarting optimization...")
-res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 500)
+res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 100)
 println("\nOptimization complete!")
 println("Final loss: ", losses[end])
 
