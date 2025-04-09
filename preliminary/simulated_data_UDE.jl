@@ -475,6 +475,15 @@ u0_norm = [
 
 # Define UDE dynamics with normalized states
 function ude_dynamics!(du, u, p, t)
+    # Extract physical and neural parameters from p
+    p_physical = p[1:n_physical]
+    p_neural = p[n_physical+1:end]
+
+    # Create parameter struct with current values
+    p_current = deepcopy(p_modified)
+    for i in 1:n_physical
+        setfield!(p_current, physical_param_keys[i], p_physical[i])
+    end
     current_acceleration = Fext_input(t)
     acc_norm = normalizer(current_acceleration, Fext_min, Fext_max)
     
@@ -490,7 +499,7 @@ function ude_dynamics!(du, u, p, t)
     
     # Get analytical model derivatives using modified parameters
     du_model = similar(du)
-    AnalyticalModel.CoupledSystem!(du_model, u_denorm, p_modified, t, current_acceleration)
+    AnalyticalModel.CoupledSystem!(du_model, u_denorm, p_current, t, current_acceleration)
     
     # Normalize the model derivatives
     correction_scales = [
@@ -505,19 +514,10 @@ function ude_dynamics!(du, u, p, t)
     
     # Neural network prediction
     nn_input = vcat(u, acc_norm)
-    nn_correction = U(nn_input, p, _st)[1]
+    nn_correction = U(nn_input, p_neural, _st)[1]
     
     # Combine normalized derivatives
     du .= du_model_norm + nn_correction
-
-    # Alternative approach: constrain known states (NOTE: NN output states will need to go from 6 -> 4)
-    #du[1] = u[2]  # x1dot is the derivative of x1 (no correction needed)
-    #du[3] = u[4]  # x2dot is the derivative of x2 (no correction needed)
-    # For other states, use model + neural network corrections
-    #du[2] = du_model_norm[2] + nn_correction[2]  # x1dot'
-    #du[4] = du_model_norm[4] + nn_correction[4]  # x2dot'
-    #du[5] = du_model_norm[5] + nn_correction[5]  # Qvar'
-    #du[6] = du_model_norm[6] + nn_correction[6]  # V'
 end
 
 # Define the activation function
@@ -544,11 +544,18 @@ rng = Random.default_rng()
 nn_params, st = Lux.setup(rng, U)
 const _st = st
 
+# Choose fundamental parameters to optimize
+physical_param_keys = [:m1, :E, :eta, :c, :g0, :Tp, :Tf, :gss, :rho, :cp, :wt, :wb, :ws, 
+                        :Lss, :Lff, :Leff, :e, :ep, :Vbias, :Rload, :N, :kss]  
+n_physical = length(physical_param_keys)
+p_physical = Float64[getfield(p_modified, key) for key in physical_param_keys]
+
 # Convert parameters to a flat vector
-p_flat = ComponentArray(nn_params)
+p_neural = ComponentArray(nn_params)
+p_combined = [p_physical; p_neural]  # Physical parameters + NN parameters
 
 # Define the problem
-prob_nn = ODEProblem(ude_dynamics!, u0_norm, tspan, p_flat)
+prob_nn = ODEProblem(ude_dynamics!, u0_norm, tspan, p_combined)
 
 # Predict function
 function predict(θ)
@@ -585,7 +592,7 @@ end
 
 # Optimization setup
 optf = OptimizationFunction((θ, p) -> loss(θ), Optimization.AutoZygote())
-optprob = OptimizationProblem(optf, p_flat)
+optprob = OptimizationProblem(optf, p_combined)
 
 # Start optimization
 println("\nStarting optimization...")
