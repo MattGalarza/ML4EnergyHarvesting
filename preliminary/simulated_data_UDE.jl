@@ -475,9 +475,8 @@ u0_norm = [
 
 # Define UDE dynamics with normalized states
 function ude_dynamics!(du, u, p, t)
-    # Extract physical and neural parameters from p
-    p_physical = p[1:n_physical]
-    p_neural = p[n_physical+1:end]
+    # Extract physical parameters from p
+    p_physical = p.physical
 
     # Create parameter struct with current values
     p_current = deepcopy(p_modified)
@@ -514,7 +513,7 @@ function ude_dynamics!(du, u, p, t)
     
     # Neural network prediction
     nn_input = vcat(u, acc_norm)
-    nn_correction = U(nn_input, p_neural, _st)[1]
+    nn_correction = U(nn_input, p.neural, _st)[1]
     
     # Combine normalized derivatives
     du .= du_model_norm + nn_correction
@@ -545,13 +544,13 @@ nn_params, st = Lux.setup(rng, U)
 const _st = st
 
 # Choose fundamental parameters to optimize
-physical_param_keys = [:m1, :E, :eta, :c, :g0, :Tp, :Tf, :gss, :rho, :cp, :wt, :wb, :ws, :Lss, :Lff, :Leff, :e, :ep, :Vbias, :Rload, :N, :kss]  
+#physical_param_keys = [:m1, :E, :eta, :c, :g0, :Tp, :Tf, :gss, :rho, :cp, :wt, :wb, :ws, :Lss, :Lff, :Leff, :e, :ep, :Vbias, :Rload, :N, :kss]  
+physical_param_keys = [:c, :E, :eta]
 n_physical = length(physical_param_keys)
 p_physical = Float64[getfield(p_modified, key) for key in physical_param_keys]
 
 # Convert parameters to a flat vector
-p_neural = ComponentArray(nn_params)
-p_combined = vcat(p_physical, p_neural)  # Physical parameters + NN parameters
+p_combined = ComponentArray(physical = p_physical, neural = ComponentArray(nn_params)) # Physical parameters + NN parameters
 
 # Define the problem
 prob_nn = ODEProblem(ude_dynamics!, u0_norm, tspan, p_combined)
@@ -595,7 +594,7 @@ optprob = OptimizationProblem(optf, p_combined)
 
 # Start optimization
 println("\nStarting optimization...")
-res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 100)
+res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 20)
 println("\nOptimization complete!")
 println("Final loss: ", losses[end])
 
