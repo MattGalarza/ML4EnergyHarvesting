@@ -594,7 +594,7 @@ optprob = OptimizationProblem(optf, p_combined)
 
 # Start optimization
 println("\nStarting optimization...")
-res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 20)
+res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 250)
 println("\nOptimization complete!")
 println("Final loss: ", losses[end])
 
