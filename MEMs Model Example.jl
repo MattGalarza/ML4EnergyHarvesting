@@ -150,6 +150,7 @@ function electrostatic(x1, x2, Qvar, g0, gp, a, e, ep, cp, wt, wb, ke, E, I, Lef
 
 
             
+
         end
         return Cvar_value
     end
