@@ -134,6 +134,7 @@ function electrostatic(x1, x2, Qvar, g0, gp, a, e, ep, cp, wt, wb, ke, E, I, Lef
             Cair_l = ((e * Tf) / (2 * a)) * log((gp + x2 + 2 * a * Leff) / (gp + x2))
             Cvar_l = 1 / (1/crl + 1/Cair_l + 1/crl)
             # Total variable capacitance, Cvar
+            
             Cvar_value = (N / 2) * (Cvar_r + Cvar_l)
         elseif abs(x2) >= gp # electrodes are in contact
             crl = (e * ep * Leff * Tf) / Tp
