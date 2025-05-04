@@ -146,6 +146,7 @@ function electrostatic(x1, x2, Qvar, g0, gp, a, e, ep, cp, wt, wb, ke, E, I, Lef
             Cvar_nc = 1 / (1/crl + 1/Cair_nc + 1/crl)
             # Total variable capacitance, Cvar
             Cvar_value = (N / 2) * (Cvar_c + Cvar_nc)
+            
         end
         return Cvar_value
     end
