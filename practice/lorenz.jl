@@ -28,7 +28,7 @@ end
 
 # Initial conditions
 u0 = [1, 1, 1]
-p = [10, 28, 8/3]
+p_ = [10, 28, 8/3]
 tspan = (0.0, 50) # simulation length
 abstol = 1e-9 # absolute solver tolerance
 reltol = 1e-6 # relative solver tolerance
@@ -89,7 +89,7 @@ function ude_dynamics!(du, u, p, t, p_true)
 end
 
 # Closure with the known parameter
-nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p)
+nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p_)
 # Define the problem
 prob_nn = ODEProblem(nn_dynamics!, u[:, 1], tspan, p)
 
@@ -118,7 +118,7 @@ callback = function (θ, l)
 end
 
 # Optimization setup
-optf = OptimizationFunction((θ, p) -> loss(θ), Optimization.AutoZygote())
+optf = OptimizationFunction((x, p) -> loss(x), Optimization.AutoZygote())
 optprob = OptimizationProblem(optf, p)
 
 # Start optimization
