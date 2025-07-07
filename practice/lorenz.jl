@@ -81,7 +81,7 @@ nn_params, st = Lux.setup(rng, U)
 const _st = st
 
 # Define the hybrid model
-function ude_dynamics!(du, u, p, t)
+function ude_dynamics!(du, u, p, t, p_true)
     u_pred = U(u, p, _st)[1] # Network prediction
     du[1] = u_pred[1]
     du[2] = u_pred[2]
