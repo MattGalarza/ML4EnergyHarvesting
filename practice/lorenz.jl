@@ -67,6 +67,7 @@ display(p4)
 # ------------------------------------ Create noisy data ------------------------------------
 
 # Create noisy data from the analytical solution
+rng = Random.default_rng(1111)
 noise = rand(rng, 2)
 p_data = [noise*10, noise*28, noise*8/3] 
 
@@ -111,13 +112,13 @@ function predict(θ, X = sol_data[:, 1], T = t)
     pred = solve(_prob, Rosenbrock23(), saveat = T,
         abstol = 1e-6, reltol = 1e-6,
         sensealg = QuadratureAdjoint(autojacvec = ReverseDiffVJP(true)))
-    return Array(pred)  # Returns 3 x N matrix
+    return Array(pred)
 end
 
 # Loss function
 function loss(θ)
     u_pred = predict(θ)
-    return mean(abs2, u_data - u_pred)
+    return mean(abs2, sol_data - u_pred)
 end
 
 # Simple callback
@@ -132,7 +133,7 @@ end
 
 # Optimization setup - optimize the neural network parameters, not the Lorenz parameters
 optf = OptimizationFunction((θ, p) -> loss(θ), Optimization.AutoZygote())
-optprob = OptimizationProblem(optf, θ)  # Use vectorized parameters
+optprob = OptimizationProblem(optf, θ)
 
 # Start optimization
 println("\nStarting optimization...")

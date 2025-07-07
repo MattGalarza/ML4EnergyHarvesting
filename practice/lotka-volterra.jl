@@ -3,7 +3,7 @@ using DifferentialEquations, Lux, LuxCore, Optimization, OptimizationOptimisers,
 using ComponentArrays, Zygote, Plots, Random, Statistics, SciMLSensitivity, LineSearches
 
 # Initialize random number generator
-rng = Random.default_rng()
+rng = Random.default_rng(1111)
 
 function lotka!(du, u, p, t)
     α, β, γ, δ = p
@@ -78,14 +78,6 @@ res1 = Optimization.solve(
     optprob, OptimizationOptimisers.Adam(), callback = callback, maxiters = 5000)
 println("Training loss after $(length(losses)) iterations: $(losses[end])")
 
-optprob2 = Optimization.OptimizationProblem(optf, res1.u)
-res2 = Optimization.solve(
-    optprob2, LBFGS(linesearch = BackTracking()), callback = callback, maxiters = 1000)
-println("Final training loss after $(length(losses)) iterations: $(losses[end])")
-
-# Rename the best candidate
-p_trained = res2.u
-
 # Plot the losses
 pl_losses = plot(1:5000, losses[1:5000], yaxis = :log10, xaxis = :log10,
     xlabel = "Iterations", ylabel = "Loss", label = "ADAM", color = :blue)
@@ -95,7 +87,7 @@ plot!(5001:length(losses), losses[5001:end], yaxis = :log10, xaxis = :log10,
 ## Analysis of the trained network
 # Plot the data and the approximation
 ts = first(solution.t):(mean(diff(solution.t)) / 2):last(solution.t)
-X̂ = predict(p_trained, Xₙ[:, 1], ts)
+X̂ = predict(p, Xₙ[:, 1], ts)
 # Trained on noisy data vs real solution
 pl_trajectory = plot(ts, transpose(X̂), xlabel = "t", ylabel = "x(t), y(t)", color = :red,
     label = ["UDE Approximation" nothing])
@@ -104,7 +96,7 @@ scatter!(solution.t, transpose(Xₙ), color = :black, label = ["Measurements" no
 # Ideal unknown interactions of the predictor
 Ȳ = [-p_[2] * (X̂[1, :] .* X̂[2, :])'; p_[3] * (X̂[1, :] .* X̂[2, :])']
 # Neural network guess
-Ŷ = U(X̂, p_trained, st)[1]
+Ŷ = U(X̂, p, st)[1]
 
 pl_reconstruction = plot(ts, transpose(Ŷ), xlabel = "t", ylabel = "U(x,y)", color = :red,
     label = ["UDE Approximation" nothing])
