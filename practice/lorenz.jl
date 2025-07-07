@@ -6,7 +6,7 @@ using Optimization, OptimizationOptimisers, OptimizationOptimJL, LineSearches
 using LinearAlgebra, Statistics, Interpolations
 
 # External Libraries
-using ComponentArrays, Lux, Zygote, Plots, DelimitedFiles, Random, Parameters, SpecialFunctions
+using ComponentArrays, Lux, LuxCore, Zygote, Plots, DelimitedFiles, Random, Parameters, SpecialFunctions
 
 # --------------------------------------- Analytical Model ----------------------------------
 
@@ -28,7 +28,7 @@ end
 
 # Initial conditions
 u0 = [1, 1, 1]
-p_ = [10, 28, 8/3]
+p = [10, 28, 8/3]
 tspan = (0.0, 50) # simulation length
 abstol = 1e-9 # absolute solver tolerance
 reltol = 1e-6 # relative solver tolerance
@@ -64,6 +64,18 @@ display(p3)
 p4 = plot(x, y, z, xlabel = "x", ylabel = "y", zlabel = "z", legend = false)
 display(p4)
 
+# ------------------------------------ Create noisy data ------------------------------------
+
+# Create noisy data from the analytical solution
+noise = rand(rng, 2)
+p_data = [noise*10, noise*28, noise*8/3] 
+
+# Define and solve the ODE problem
+eqn_data = ODEProblem(lorenz!, u0, tspan, p)
+
+# Solve the system using Rosenbrock23 solver
+sol_data = solve(eqn_data, Rosenbrock23(); abstol=abstol, reltol=reltol, maxiters=1e7)
+
 # ------------------------------------ Setting up the UDE ------------------------------------
 
 # Define the activation function
@@ -81,7 +93,7 @@ nn_params, st = Lux.setup(rng, U)
 const _st = st
 
 # Define the hybrid model
-function ude_dynamics!(du, u, p, t, p_true)
+function ude_dynamics!(du, u, θ, t, p_true)
     u_pred = U(u, p, _st)[1] # Network prediction
     du[1] = u_pred[1]
     du[2] = u_pred[2]
@@ -91,20 +103,21 @@ end
 # Closure with the known parameter
 nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p_)
 # Define the problem
-prob_nn = ODEProblem(nn_dynamics!, u[:, 1], tspan, p)
+prob_nn = ODEProblem(nn_dynamics!, sol_data[:, 1], tspan, p)
 
 # Prediction function
-function predict(θ, X = u[:, 1], T = t)
-    _prob = remake(prob_nn, u0 = X, tspan, p = θ)
-    Array(solve(_prob, Rosenbrock23(), saveat = T,
+function predict(θ, X = sol_data[:, 1], T = t)
+    _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = θ)
+    pred = solve(_prob, Rosenbrock23(), saveat = T,
         abstol = 1e-6, reltol = 1e-6,
-        sensealg = QuadratureAdjoint(autojacvec = ReverseDiffVJP(true))))
+        sensealg = QuadratureAdjoint(autojacvec = ReverseDiffVJP(true)))
+    return Array(pred)  # Returns 3 x N matrix
 end
 
 # Loss function
 function loss(θ)
     u_pred = predict(θ)
-    mean(abs2, u - u_pred)
+    return mean(abs2, u_data - u_pred)
 end
 
 # Simple callback
@@ -117,12 +130,25 @@ callback = function (θ, l)
     return false
 end
 
-# Optimization setup
+# Optimization setup - optimize the neural network parameters, not the Lorenz parameters
 optf = OptimizationFunction((θ, p) -> loss(θ), Optimization.AutoZygote())
-optprob = OptimizationProblem(optf, p)
+optprob = OptimizationProblem(optf, θ)  # Use vectorized parameters
 
 # Start optimization
 println("\nStarting optimization...")
 res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 1000)
 println("\nOptimization complete!")
 println("Final loss: ", losses[end])
+
+# ------------------------------------ Results Analysis ------------------------------------
+
+# Test the trained model
+u_pred_final = predict(res.u)
+
+# Plot comparison
+p_compare = plot(t, u_data[1,:], label="True x", xlabel="t", ylabel="x")
+plot!(p_compare, t, u_pred_final[1,:], label="Predicted x", linestyle=:dash)
+display(p_compare)
+
+println("Final loss: ", loss(res.u))
+println("Training completed successfully!")
