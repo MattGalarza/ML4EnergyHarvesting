@@ -118,7 +118,7 @@ callback = function (θ, l)
 end
 
 # Optimization setup
-optf = OptimizationFunction((x, p) -> loss(x), Optimization.AutoZygote())
+optf = OptimizationFunction((θ, p) -> loss(θ), Optimization.AutoZygote())
 optprob = OptimizationProblem(optf, p)
 
 # Start optimization
