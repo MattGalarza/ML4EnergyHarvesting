@@ -28,7 +28,7 @@ end
 
 # Initial conditions
 u0 = [1, 1, 1]
-p = [10, 28, 8/3]
+p_true = [10, 28, 8/3]
 tspan = (0.0, 50) # simulation length
 abstol = 1e-9 # absolute solver tolerance
 reltol = 1e-6 # relative solver tolerance
@@ -36,7 +36,7 @@ reltol = 1e-6 # relative solver tolerance
 # ---------------------------------- Solve Analytical Model ---------------------------------
 
 # Define and solve the ODE problem
-eqn = ODEProblem(lorenz!, u0, tspan, p)
+eqn = ODEProblem(lorenz!, u0, tspan, p_true)
 
 # Solve the system using Rosenbrock23 solver
 sol = solve(eqn, Rosenbrock23(); abstol=abstol, reltol=reltol, maxiters=1e7)
@@ -68,14 +68,26 @@ display(p4)
 
 # Create noisy data from the analytical solution
 rng = Random.default_rng(1111)
-noise = rand(rng, 2)
-p_data = [noise*10, noise*28, noise*8/3] 
+X_clean = hcat(sol.u...) 
+t_data = sol.t
 
-# Define and solve the ODE problem
-eqn_data = ODEProblem(lorenz!, u0, tspan, p)
+# Add noise to the solution
+noise_magnitude = 0.15
+X_noisy = X_clean .+ noise_magnitude * randn(rng, size(X_clean))
 
-# Solve the system using Rosenbrock23 solver
-sol_data = solve(eqn_data, Rosenbrock23(); abstol=abstol, reltol=reltol, maxiters=1e7)
+# Plot data comparison
+p5 = plot(t_data, X_clean[1,:], label="Clean x", xlabel="t", ylabel="x", linewidth=2)
+plot!(p5, t_data, X_noisy[1,:], label="Noisy x", linestyle=:dash, alpha=0.7)
+display(p5)
+p6 = plot(t_data, X_clean[2,:], label="Clean x", xlabel="t", ylabel="x", linewidth=2)
+plot!(p6, t_data, X_noisy[2,:], label="Noisy x", linestyle=:dash, alpha=0.7)
+display(p6)
+p7 = plot(t_data, X_clean[3,:], label="Clean x", xlabel="t", ylabel="x", linewidth=2)
+plot!(p7, t_data, X_noisy[3,:], label="Noisy x", linestyle=:dash, alpha=0.7)
+display(p7)
+p8 = plot(X_clean[1,:], X_clean[2,:], X_clean[3,:], label="Clean x", xlabel = "x", ylabel = "y", zlabel = "z")
+plot!(p8, X_noisy[1,:], X_noisy[2,:], X_noisy[3,:], label="Noisy x", xlabel = "x", ylabel = "y", zlabel = "z", linestyle=:dash, alpha=0.7)
+display(p8)
 
 # ------------------------------------ Setting up the UDE ------------------------------------
 
@@ -93,13 +105,45 @@ rng = Random.default_rng()
 nn_params, st = Lux.setup(rng, U)
 const _st = st
 
+p_nn, reconstruct = LuxCore.vectorize(nn_params)
+p_data = [9.5, 27.0, 2.5]
+p_combined = vcat(p_nn, p_data)  # Physical parameters + NN parameters
+
 # Define the hybrid model
-function ude_dynamics!(du, u, θ, t, p_true)
+function ude_dynamics!(du, u, p_combined, t, p_true)
+    # Split combined parameters
+    len = length(p_nn)
+    p_nn = p_combined[1:len]
+    p_data = p_combined[len+1:end]
+
     u_pred = U(u, p, _st)[1] # Network prediction
     du[1] = u_pred[1]
     du[2] = u_pred[2]
     du[3] = u_pred[3]
 end
+
+function ude_dynamics!(du, u, θ_combined, t)
+    # Split combined parameters
+    n_nn = length(θ_nn)
+    θ_nn_current = θ_combined[1:n_nn]
+    p_current = θ_combined[n_nn+1:end]
+    
+    # Reconstruct NN parameters
+    nn_params_current = reconstruct(θ_nn_current)
+    
+    # Get NN correction term
+    nn_correction = U(u, nn_params_current, _st)[1]
+    
+    # Analytical Lorenz model with current parameters
+    x, y, z = u
+    σ, ρ, β = p_current
+    
+    # Hybrid dynamics: Analytical model + NN correction
+    du[1] = σ * (y - x) + nn_correction[1]
+    du[2] = x * (ρ - z) - y + nn_correction[2]
+    du[3] = x * y - β * z + nn_correction[3]
+end
+
 
 # Closure with the known parameter
 nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p_)
@@ -118,7 +162,7 @@ end
 # Loss function
 function loss(θ)
     u_pred = predict(θ)
-    return mean(abs2, sol_data - u_pred)
+    return mean(abs2, u_data - u_pred)
 end
 
 # Simple callback
