@@ -116,68 +116,50 @@ function ude_dynamics!(du, u, p_combined, t, p_true)
     p_nn = p_combined[1:len]
     p_data = p_combined[len+1:end]
 
-    u_pred = U(u, p, _st)[1] # Network prediction
-    du[1] = u_pred[1]
-    du[2] = u_pred[2]
-    du[3] = u_pred[3]
-end
-
-function ude_dynamics!(du, u, θ_combined, t)
-    # Split combined parameters
-    n_nn = length(θ_nn)
-    θ_nn_current = θ_combined[1:n_nn]
-    p_current = θ_combined[n_nn+1:end]
-    
     # Reconstruct NN parameters
-    nn_params_current = reconstruct(θ_nn_current)
+    nn_params = reconstruct(p_nn)
+    u_pred = U(u, nn_params, _st)[1] # Network prediction
     
-    # Get NN correction term
-    nn_correction = U(u, nn_params_current, _st)[1]
-    
-    # Analytical Lorenz model with current parameters
-    x, y, z = u
-    σ, ρ, β = p_current
-    
-    # Hybrid dynamics: Analytical model + NN correction
-    du[1] = σ * (y - x) + nn_correction[1]
-    du[2] = x * (ρ - z) - y + nn_correction[2]
-    du[3] = x * y - β * z + nn_correction[3]
+    # Add NN correction to the analytical model
+    lorenz!(du, u, p_data, t)
+    du .+= u_pred
 end
 
-
-# Closure with the known parameter
-nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p_)
 # Define the problem
-prob_nn = ODEProblem(nn_dynamics!, sol_data[:, 1], tspan, p)
+prob_nn = ODEProblem(ude_dynamics!, u0, tspan, p_combined)
 
 # Prediction function
-function predict(θ, X = sol_data[:, 1], T = t)
-    _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = θ)
-    pred = solve(_prob, Rosenbrock23(), saveat = T,
-        abstol = 1e-6, reltol = 1e-6,
-        sensealg = QuadratureAdjoint(autojacvec = ReverseDiffVJP(true)))
+function predict(p_combined, X = u0, T = t_data)
+    _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = p_combined)
+    pred = solve(_prob, Rosenbrock23(), saveat = T, abstol = 1e-6, reltol = 1e-6,
+            sensealg = QuadratureAdjoint(autojacvec = ReverseDiffVJP(true)))
     return Array(pred)
 end
 
 # Loss function
-function loss(θ)
-    u_pred = predict(θ)
-    return mean(abs2, u_data - u_pred)
+function loss(p_combined)
+    u_pred = predict(p_combined)
+    return mean(abs2, X_noisy - u_pred)
 end
 
 # Simple callback
 losses = Float64[]
 callback = function (θ, l)
     push!(losses, l)
-    if length(losses) % 5 == 0
+    if length(losses) % 50 == 0
+        # Extract current model parameters for monitoring
+        len = length(θ_nn)
+        p_current = θ[len+1:end]
         println("Iteration $(length(losses)): Loss = $(l)")
+        println("Current p: [$(round(p_current[1], digits=3)), $(round(p_current[2], digits=3)), $(round(p_current[3], digits=3))]")
+        println("True p: [$(p_true[1]), $(p_true[2]), $(round(p_true[3], digits=3))]")
     end
     return false
 end
 
-# Optimization setup - optimize the neural network parameters, not the Lorenz parameters
+# Optimization setup
 optf = OptimizationFunction((θ, p) -> loss(θ), Optimization.AutoZygote())
-optprob = OptimizationProblem(optf, θ)
+optprob = OptimizationProblem(optf, p_combined)
 
 # Start optimization
 println("\nStarting optimization...")
@@ -187,13 +169,46 @@ println("Final loss: ", losses[end])
 
 # ------------------------------------ Results Analysis ------------------------------------
 
+# Extract final parameters
+len = length(θ_nn)
+nn_final = res.u[1:len]
+p_final = res.u[len+1:end]
+
+println("\nFinal Results:")
+println("True parameters: ", p_true)
+println("Initial parameters: ", p_data)
+println("Final parameters: ", [round(p, digits=3) for p in p_final])
+println("Parameter errors: ", [round(abs(p_true[i] - p_final[i]), digits=3) for i in 1:3])
+
 # Test the trained model
 u_pred_final = predict(res.u)
 
-# Plot comparison
-p_compare = plot(t, u_data[1,:], label="True x", xlabel="t", ylabel="x")
-plot!(p_compare, t, u_pred_final[1,:], label="Predicted x", linestyle=:dash)
-display(p_compare)
+# Compare all results (clean, noisy, and prediction)
+p_compare1 = plot(t_data, X_clean[1,:], label="True (clean)", xlabel="t", ylabel="x", linewidth=2, color=:black)
+scatter!(p_compare1, t_data[1:5:end], X_noisy[1,1:5:end], label="Noisy data", color=:red, alpha=0.6, markersize=3)
+plot!(p_compare1, t_data, u_pred_final[1,:], label="UDE prediction", linestyle=:dash, linewidth=2, color=:blue)
+title!("X Component Comparison")
+display(p_compare1)
+
+# NN correction terms
+function get_nn_correction(p_combined, X_state)
+    len = length(θ_nn)
+    nn_current = p_combined[1:len]
+    nn_params = reconstruct(nn_current)
+    return U(X_state, nn_params, _st)[1]
+end
+
+# Sample correction at a few time points
+correction_sample = [get_nn_correction(res.u, X_noisy[:, i]) for i in 1:10:length(t_data)]
+correction_matrix = hcat(correction_sample...)
+
+p_correction = plot(t_data[1:10:end], correction_matrix[1,:], label="NN correction x", 
+                   xlabel="t", ylabel="Correction", linewidth=2)
+plot!(p_correction, t_data[1:10:end], correction_matrix[2,:], label="NN correction y")
+plot!(p_correction, t_data[1:10:end], correction_matrix[3,:], label="NN correction z")
+title!("Neural Network Correction Terms")
+display(p_correction)
 
 println("Final loss: ", loss(res.u))
 println("Training completed successfully!")
+println("\nThe NN learned to correct for the differences between the analytical model and noisy data.")
