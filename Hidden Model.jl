@@ -10,7 +10,7 @@ using ComponentArrays, Lux, LuxCore, Zygote, Plots, DelimitedFiles, Random, Para
 
 # --------------------------------------- Analytical Model ----------------------------------
 
-# Define the multi-mass system model
+# Define the multi-mass system 
 function hidden_model!(du, u, p, t, current_acceleration)
     # Unpack state variables
     x1, v1, x2, v2, x3, v3, x4, v4 = u
@@ -24,7 +24,50 @@ function hidden_model!(du, u, p, t, current_acceleration)
     # Force calculations for each mass
     # Mass 1
     F1_spring = -(k1 + k2) * x1 + k2 * x2 
-    F1_damping = -c1 * x1 + c2 * (x2 - x1) * (v2 - v1) * abs(v2 - v1)
+    F1_damping = c2 * (x2 - x1) * (v2 - v1) * abs(v2 - v1)
+    F1_total = F1_spring + F1_damping
+    
+    # Mass 2
+    F2_spring = k2 * x1 - (k2 + k3) * x2 + k3 * x3
+    F2_damping = c2 * (x1 - x2) * (v1 - v2) * abs(v1 - v2) + c3 * (v3 - v2)
+    F2_total = F2_spring + F2_damping
+    
+    # Mass 3
+    F3_spring = k3 * (x2 - x3) + k4 * (x4 - x3)^3
+    F3_damping = c3 * (v2 - v3) + c4 * (v4 - v3)
+    F3_total = F3_spring + F3_damping
+    
+    # Mass 4
+    F4_spring = k4 * (x3 - x4)^3  
+    F4_damping = c4 * (v3 - v4)  
+    F4_total = F4_spring + F4_damping
+    
+    # Model state space
+    du[1] = v1
+    du[2] = F1_total / m1 + Fext
+    du[3] = v2
+    du[4] = F2_total / m2 
+    du[5] = v3
+    du[6] = F3_total / m3  
+    du[7] = v4  
+    du[8] = F4_total / m4
+end
+
+# Define the multi-mass system with additional hidden physics
+function hidden_physics_model!(du, u, p, t, current_acceleration)
+    # Unpack state variables
+    x1, v1, x2, v2, x3, v3, x4, v4 = u
+    
+    # Unpack parameters 
+    m1, m2, m3, m4, k1, k2, k3, k4, c1, c2, c3, c4 = p
+
+    # Use current_acceleration as the external force
+    Fext = current_acceleration
+    
+    # Force calculations for each mass
+    # Mass 1: Added nonlinear damping term
+    F1_spring = -(k1 + k2) * x1 + k2 * x2 
+    F1_damping = c1 * x1^2 + c2 * (x2 - x1) * (v2 - v1) * abs(v2 - v1)
     F1_total = F1_spring + F1_damping
     
     # Mass 2
@@ -81,7 +124,7 @@ end
 
 # Initial conditions
 u0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-p_true = [12.0, 8.5, 10.0, 9.25, 100.0, 80.0, 60.0, 75.0, 1.0, 3.2, 4.5, 2.0]                
+p_true = [12.0, 8.5, 10.0, 9.25, 125.0, 80.0, 93.0, 75.0, 1.0, 3.75, 4.5, 2.0]                
 tspan = (0.0, 20.0) # simulation length
 abstol = 1e-9 # absolute solver tolerance
 reltol = 1e-6 # relative solver tolerance
