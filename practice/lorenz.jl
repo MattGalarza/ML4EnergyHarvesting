@@ -105,51 +105,50 @@ rng = Random.default_rng()
 nn_params, st = Lux.setup(rng, U)
 const _st = st
 
-p_nn, reconstruct = LuxCore.vectorize(nn_params)
-p_data = [9.5, 27.0, 2.5]
-p_combined = vcat(p_nn, p_data)  # Physical parameters + NN parameters
+p_init = [9.5, 27.0, 2.5]  # Initial parameter guess
+p_combined = ComponentArray(physical = p_init, neural = ComponentArray(nn_params))
 
-# Define the hybrid model
-function ude_dynamics!(du, u, p_combined, t, p_true)
-    # Split combined parameters
-    len = length(p_nn)
-    p_nn = p_combined[1:len]
-    p_data = p_combined[len+1:end]
+# Store original structure for reference
+n_physical = length(p_init)
 
-    # Reconstruct NN parameters
-    nn_params = reconstruct(p_nn)
-    u_pred = U(u, nn_params, _st)[1] # Network prediction
+# FIXED: Simplified dynamics using ComponentArray structure
+function ude_dynamics!(du, u, p, t)
+    # Extract parameters directly from ComponentArray
+    p_current = p.physical  # Physical parameters
+    nn_params_current = p.neural  # Neural network parameters (already in correct format)
+    
+    # Get NN correction
+    nn_correction = U(u, nn_params_current, _st)[1]
     
     # Add NN correction to the analytical model
-    lorenz!(du, u, p_data, t)
-    du .+= u_pred
+    lorenz!(du, u, p_current, t)
+    du .+= nn_correction
 end
 
 # Define the problem
 prob_nn = ODEProblem(ude_dynamics!, u0, tspan, p_combined)
 
 # Prediction function
-function predict(p_combined, X = u0, T = t_data)
-    _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = p_combined)
+function predict(p, X = u0, T = t_data)
+    _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = p)
     pred = solve(_prob, Rosenbrock23(), saveat = T, abstol = 1e-6, reltol = 1e-6,
             sensealg = QuadratureAdjoint(autojacvec = ReverseDiffVJP(true)))
     return Array(pred)
 end
 
 # Loss function
-function loss(p_combined)
-    u_pred = predict(p_combined)
+function loss(p)
+    u_pred = predict(p)
     return mean(abs2, X_noisy - u_pred)
 end
 
 # Simple callback
 losses = Float64[]
-callback = function (θ, l)
+callback = function (state, l)
     push!(losses, l)
-    if length(losses) % 50 == 0
+    if length(losses) % 10 == 0
         # Extract current model parameters for monitoring
-        len = length(θ_nn)
-        p_current = θ[len+1:end]
+        p_current = state.u.physical  # Access parameters through state.u
         println("Iteration $(length(losses)): Loss = $(l)")
         println("Current p: [$(round(p_current[1], digits=3)), $(round(p_current[2], digits=3)), $(round(p_current[3], digits=3))]")
         println("True p: [$(p_true[1]), $(p_true[2]), $(round(p_true[3], digits=3))]")
@@ -158,25 +157,23 @@ callback = function (θ, l)
 end
 
 # Optimization setup
-optf = OptimizationFunction((θ, p) -> loss(θ), Optimization.AutoZygote())
+optf = OptimizationFunction((p, _) -> loss(p), Optimization.AutoZygote())
 optprob = OptimizationProblem(optf, p_combined)
 
 # Start optimization
 println("\nStarting optimization...")
-res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 1000)
+res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 100)
 println("\nOptimization complete!")
 println("Final loss: ", losses[end])
 
 # ------------------------------------ Results Analysis ------------------------------------
 
 # Extract final parameters
-len = length(θ_nn)
-nn_final = res.u[1:len]
-p_final = res.u[len+1:end]
+p_final = res.u.physical
 
 println("\nFinal Results:")
 println("True parameters: ", p_true)
-println("Initial parameters: ", p_data)
+println("Initial parameters: ", p_init)
 println("Final parameters: ", [round(p, digits=3) for p in p_final])
 println("Parameter errors: ", [round(abs(p_true[i] - p_final[i]), digits=3) for i in 1:3])
 
@@ -191,11 +188,8 @@ title!("X Component Comparison")
 display(p_compare1)
 
 # NN correction terms
-function get_nn_correction(p_combined, X_state)
-    len = length(θ_nn)
-    nn_current = p_combined[1:len]
-    nn_params = reconstruct(nn_current)
-    return U(X_state, nn_params, _st)[1]
+function get_nn_correction(p, X_state)
+    return U(X_state, p.neural, _st)[1]
 end
 
 # Sample correction at a few time points
