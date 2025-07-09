@@ -57,7 +57,7 @@ end
 
 # Sine Wave External Force
 f = 2.0 # Frequency (Hz)
-alpha = 0.05 # Applied acceleration constant
+alpha = 0.75 # Applied acceleration constant
 g = 9.81 # Gravitational constant 
 A = alpha * g
 t_ramp = 1.0 # Ramp-up duration (s)
@@ -81,7 +81,7 @@ end
 
 # Initial conditions
 u0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-p_true = [1.0, 0.75, 1.2, 0.9, 10.0, 8.0, 6.0, 0.75, 0.5, 0.3, 0.4, 0.2]                
+p_true = [12.0, 8.5, 10.0, 9.25, 100.0, 80.0, 60.0, 75.0, 1.0, 3.2, 4.5, 2.0]                
 tspan = (0.0, 20.0) # simulation length
 abstol = 1e-9 # absolute solver tolerance
 reltol = 1e-6 # relative solver tolerance
@@ -98,7 +98,7 @@ end
 eqn = ODEProblem(hidden_model_wrapper!, u0, tspan, p_true)
 
 # Solve the system using Rosenbrock23 solver
-sol = solve(eqn, Rosenbrock23(); abstol=abstol, reltol=reltol, maxiters=1e7, saveat=tspan[1]:0.001:tspan[2])
+sol = solve(eqn, Rosenbrock23(); abstol=abstol, reltol=reltol, maxiters=1e7) # saveat=tspan[1]:0.001:tspan[2]
 
 # Verify the solution structure
 println("Type of sol.u: ", typeof(sol.u))
@@ -119,32 +119,27 @@ v4 = [u[8] for u in sol.u]
 u = sol.u
 t = sol.t
 
-# Plot positions vs time
+# Displacement plots
+p1 = plot(sol.t, x1, ylabel = "x1 (m)", title = "Displacement", legend = false, seriescolor = 1, palette = :Dark2_5)
+p2 = plot(sol.t, x2, ylabel = "x2 (m)", legend = false, seriescolor = 2, palette = :Dark2_5)
+p3 = plot(sol.t, x3, ylabel = "x3 (m)", legend = false, seriescolor = 3, palette = :Dark2_5)
+p4 = plot(sol.t, x4, xlabel = "Time (s)", ylabel = "x4 (m)", legend = false, seriescolor = 4, palette = :Dark2_5)
+p_combined1 = plot(p1, p2, p3, p4, layout = (4, 1), size = (800, 600))
+display(p_combined1)
 
-p1 = plot(sol.t, [x1 x2 x3 x4], 
-          xlabel = "Time (s)", 
-          ylabel = "Position", 
-          label = ["Mass 1" "Mass 2" "Mass 3" "Mass 4"],
-          title = "Mass Positions vs Time")
-display(p1)
+# Velocity plots
+p5 = plot(sol.t, v1, ylabel = "v1 (m)", title = "Velocity", legend = false, seriescolor = 1, palette = :Dark2_5)
+p6 = plot(sol.t, v2, ylabel = "v2 (m)", legend = false, seriescolor = 2, palette = :Dark2_5)
+p7 = plot(sol.t, v3, ylabel = "v3 (m)", legend = false, seriescolor = 3, palette = :Dark2_5)
+p8 = plot(sol.t, v4, xlabel = "Time (s)", ylabel = "v4 (m)", legend = false, seriescolor = 4, palette = :Dark2_5)
+p_combined2 = plot(p5, p6, p7, p8, layout = (4, 1), size = (800, 600))
+display(p_combined2)
 
-# Plot velocities vs time  
-p2 = plot(sol.t, [v1 v2 v3 v4], 
-          xlabel = "Time (s)", 
-          ylabel = "Velocity", 
-          label = ["Mass 1" "Mass 2" "Mass 3" "Mass 4"],
-          title = "Mass Velocities vs Time")
-display(p2)
+# Phase portrait plots
+p9 = plot(x1, v1, xlabel = "x1 (m)", ylabel = "v1 (m)", title = "M1 Phase Portrait", legend = false, seriescolor = 1, palette = :Dark2_5)
+p10 = plot(x2, v2, xlabel = "x2 (m)", ylabel = "v2 (m)", title = "M2 Phase Portrait", legend = false, seriescolor = 2, palette = :Dark2_5)
+p11 = plot(x3, v3, xlabel = "x3 (m)", ylabel = "v3 (m)", title = "M3 Phase Portrait", legend = false, seriescolor = 3, palette = :Dark2_5)
+p12 = plot(x4, v4, xlabel = "x4 (m)", ylabel = "v4 (m)", title = "M4 Phase Portrait", legend = false, seriescolor = 4, palette = :Dark2_5)
+p_combined3 = plot(p9, p10, p11, p12, layout = (2, 2), size = (800, 800))
+display(p_combined3)
 
-# Phase portrait for each mass
-p3 = plot(x1, v1, xlabel = "Position", ylabel = "Velocity", 
-          title = "Phase Portrait - Mass 1", legend = false)
-display(p3)
-
-# Configuration plot (masses positions relative to each other)
-p4 = plot(sol.t, [x1 x2-x1 x3-x2 x4-x3], 
-          xlabel = "Time (s)", 
-          ylabel = "Relative Position", 
-          label = ["Mass 1 (abs)" "Mass 2-1" "Mass 3-2" "Mass 4-3"],
-          title = "Relative Mass Positions")
-display(p4)
