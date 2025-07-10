@@ -277,3 +277,88 @@ p36 = plot([x4_1 x4_2], [v4_1 v4_2], xlabel = "x4 (m)", ylabel = "v4 (m)", title
 p_combined9 = plot(p33, p34, p35, p36, layout = (2, 2), size = (800, 800))
 display(p_combined9)
 
+# ----------------------------------------- Optional: Add noise -----------------------------------------
+
+
+
+
+# ----------------------------------------- Data Normalization -----------------------------------------
+
+# Define a function to normalize data
+function normalizer(data, min_val, max_val, new_min::Float64 = -1.0, new_max::Float64 = 1.0)
+    return new_min .+ (data .- min_val) .* (new_max - new_min) ./ (max_val - min_val)
+end
+
+# Define a function to denormalize data
+function denormalizer(norm_data, min_val, max_val, new_min::Float64 = -1.0, new_max::Float64 = 1.0)
+    return min_val .+ (norm_data .- new_min) .* (max_val - min_val) ./ (new_max - new_min)
+end
+
+# Calculate min and max values from state data
+x1_min, x1_max = min(minimum(x1_1), minimum(x1_2)), max(maximum(x1_1), maximum(x1_2))
+v1_min, v1_max = min(minimum(v1_1), minimum(v1_2)), max(maximum(v1_1), maximum(v1_2))
+x2_min, x2_max = min(minimum(x2_1), minimum(x2_2)), max(maximum(x2_1), maximum(x2_2))
+v2_min, v2_max = min(minimum(v2_1), minimum(v2_2)), max(maximum(v2_1), maximum(v2_2))
+x3_min, x3_max = min(minimum(x3_1), minimum(x3_2)), max(maximum(x3_1), maximum(x3_2))
+v3_min, v3_max = min(minimum(v3_1), minimum(v3_2)), max(maximum(v3_1), maximum(v3_2))
+x4_min, x4_max = min(minimum(x4_1), minimum(x4_2)), max(maximum(x4_1), maximum(x4_2))
+v4_min, v4_max = min(minimum(v4_1), minimum(v4_2)), max(maximum(v4_1), maximum(v4_2))
+Fext_val = [Fext_input(tt) for tt in t1]        
+Fext_min, Fext_max = minimum(Fext_val), maximum(Fext_val)
+
+# Store normalization bounds
+norm_bounds = (
+    x1 = (x1_min, x1_max),
+    v1 = (v1_min, v1_max),
+    x2 = (x2_min, x2_max),
+    v2 = (v2_min, v2_max),
+    x3 = (x3_min, x3_max),
+    v3 = (v3_min, v3_max),
+    x4 = (x4_min, x4_max),
+    v4 = (v4_min, v4_max),
+    Fext = (Fext_min, Fext_max)
+)
+
+# Print bounds for verification
+println("Calculated normalization bounds:")
+println("x1: [$x1_min, $x1_max]")
+println("v1: [$v1_min, $v1_max]")
+println("x2: [$x2_min, $x2_max]")
+println("v2: [$v2_min, $v2_max]")
+println("x3: [$x3_min, $x3_max]")
+println("v3: [$v3_min, $v3_max]")
+println("x4: [$x4_min, $x4_max]")
+println("v4: [$v4_min, $v4_max]")
+println("Fext: [$Fext_min, $Fext_max]")
+
+# Normalize solution data
+# Hidden model (sol1)
+x1_1_norm = normalizer(x1_1, norm_bounds.x1...)
+v1_1_norm = normalizer(v1_1, norm_bounds.v1...)
+x2_1_norm = normalizer(x2_1, norm_bounds.x2...)
+v2_1_norm = normalizer(v2_1, norm_bounds.v2...)
+x3_1_norm = normalizer(x3_1, norm_bounds.x3...)
+v3_1_norm = normalizer(v3_1, norm_bounds.v3...)
+x4_1_norm = normalizer(x4_1, norm_bounds.x4...)
+v4_1_norm = normalizer(v4_1, norm_bounds.v4...)
+
+# Hidden physics model (sol2)
+x1_2_norm = normalizer(x1_2, norm_bounds.x1...)
+v1_2_norm = normalizer(v1_2, norm_bounds.v1...)
+x2_2_norm = normalizer(x2_2, norm_bounds.x2...)
+v2_2_norm = normalizer(v2_2, norm_bounds.v2...)
+x3_2_norm = normalizer(x3_2, norm_bounds.x3...)
+v3_2_norm = normalizer(v3_2, norm_bounds.v3...)
+x4_2_norm = normalizer(x4_2, norm_bounds.x4...)
+v4_2_norm = normalizer(v4_2, norm_bounds.v4...)
+Fext_norm = normalizer(Fext_val, norm_bounds.Fext...)
+
+# Create normalized state matrices
+states_1_norm = hcat(x1_1_norm, v1_1_norm, x2_1_norm, v2_1_norm, x3_1_norm, v3_1_norm, x4_1_norm, v4_1_norm)
+states_2_norm = hcat(x1_2_norm, v1_2_norm, x2_2_norm, v2_2_norm, x3_2_norm, v3_2_norm, x4_2_norm, v4_2_norm)
+
+println()
+println("Normalized state matrices shapes:")
+println("Hidden model states: ", size(states_1_norm))
+println("Hidden physics states: ", size(states_2_norm))
+println("External force: ", size(Fext_norm))
