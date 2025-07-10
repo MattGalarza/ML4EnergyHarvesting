@@ -364,38 +364,66 @@ println("External force: ", size(Fext_norm))
 
 # ----------------------------------------- Neural ODE/UDE -----------------------------------------
 
-# Define the activation function
-rbf(x) = exp.(-(x .^ 2))
-
-# Regular deep NN chain
-const U = Lux.Chain(Lux.Dense(3, 32, rbf),
-                    Lux.Dense(32, 32, rbf),
-                    Lux.Dense(32, 3) 
+# Deep NN chain, ReLu activation function
+const U = Lux.Chain(Lux.Dense(9, 32, relu), # 9 inputs: 8 states + 1 input force
+                    Lux.Dense(32, 64, relu),
+                    Lux.Dense(64, 32, relu),
+                    Lux.Dense(32, 8) # 8 outputs for state corrections
 ) 
 
-# Initialize NN
+# Initialize NN parameters
 rng = Random.default_rng()
 nn_params, st = Lux.setup(rng, U)
 const _st = st
 
-p_init = [9.5, 27.0, 2.5]  # Initial parameter guess
-p_combined = ComponentArray(physical = p_init, neural = ComponentArray(nn_params))
+# Combine physical and neural parameters into a ComponentArray
+p_combined = ComponentArray(physical = p_true, neural = ComponentArray(nn_params))
+n_physical = length(p_true) # Store original structure for reference
 
-# Store original structure for reference
-n_physical = length(p_init)
-
-# FIXED: Simplified dynamics using ComponentArray structure
+# Define UDE dynamics with normalized states
 function ude_dynamics!(du, u, p, t)
     # Extract parameters directly from ComponentArray
-    p_current = p.physical  # Physical parameters
-    nn_params_current = p.neural  # Neural network parameters (already in correct format)
+    p_current = p.physical # Physical parameters
+    nn_params_current = p.neural # Neural network parameters
     
-    # Get NN correction
+    # Get NN correction terms
     nn_correction = U(u, nn_params_current, _st)[1]
     
     # Add NN correction to the analytical model
     lorenz!(du, u, p_current, t)
     du .+= nn_correction
+
+    # Denormalize states for analytical model
+    u_denorm = [
+        denormalizer(u[1], x1_min, x1_max),
+        denormalizer(u[2], x1dot_min, x1dot_max),
+        denormalizer(u[3], x2_min, x2_max),
+        denormalizer(u[4], x2dot_min, x2dot_max),
+        denormalizer(u[5], Qvar_min, Qvar_max),
+        denormalizer(u[6], V_min, V_max)
+    ]
+    
+    # Get analytical model derivatives using modified parameters
+    du_model = similar(du)
+    hidden_model!(du_model, u_denorm, p_current, t, current_acceleration)
+    
+    # Normalize the model derivatives
+    correction_scales = [
+        (x1_max - x1_min),
+        (x1dot_max - x1dot_min),
+        (x2_max - x2_min),
+        (x2dot_max - x2dot_min),
+        (Qvar_max - Qvar_min),
+        (V_max - V_min)
+    ]
+    du_model_norm = du_model ./ correction_scales
+    
+    # Neural network prediction
+    nn_input = vcat(u, acc_norm)
+    nn_correction = U(nn_input, p.neural, _st)[1]
+    
+    # Combine normalized derivatives
+    du .= du_model_norm + nn_correction
 end
 
 # Define the problem
