@@ -181,11 +181,23 @@ println("Parameter errors: ", [round(abs(p_true[i] - p_final[i]), digits=3) for 
 u_pred_final = predict(res.u)
 
 # Compare all results (clean, noisy, and prediction)
-p_compare1 = plot(t_data, X_clean[1,:], label="True (clean)", xlabel="t", ylabel="x", linewidth=2, color=:black)
-scatter!(p_compare1, t_data[1:5:end], X_noisy[1,1:5:end], label="Noisy data", color=:red, alpha=0.6, markersize=3)
-plot!(p_compare1, t_data, u_pred_final[1,:], label="UDE prediction", linestyle=:dash, linewidth=2, color=:blue)
+p9 = plot(t_data, X_clean[1,:], label="True (clean)", xlabel="t", ylabel="x", linewidth=2, color=:black)
+scatter!(p9, t_data[1:5:end], X_noisy[1,1:5:end], label="Noisy data", color=:red, alpha=0.6, markersize=3)
+plot!(p9, t_data, u_pred_final[1,:], label="UDE prediction", linestyle=:dash, linewidth=2, color=:blue)
 title!("X Component Comparison")
-display(p_compare1)
+display(p9)
+
+p10 = plot(t_data, X_clean[2,:], label="True (clean)", xlabel="t", ylabel="y", linewidth=2, color=:black)
+scatter!(p10, t_data[1:5:end], X_noisy[2,1:5:end], label="Noisy data", color=:red, alpha=0.6, markersize=3)
+plot!(p10, t_data, u_pred_final[2,:], label="UDE prediction", linestyle=:dash, linewidth=2, color=:blue)
+title!("Y Component Comparison")
+display(p10)
+
+p11 = plot(t_data, X_clean[3,:], label="True (clean)", xlabel="t", ylabel="z", linewidth=2, color=:black)
+scatter!(p11, t_data[1:5:end], X_noisy[3,1:5:end], label="Noisy data", color=:red, alpha=0.6, markersize=3)
+plot!(p11, t_data, u_pred_final[3,:], label="UDE prediction", linestyle=:dash, linewidth=2, color=:blue)
+title!("Z Component Comparison")
+display(p11)
 
 # NN correction terms
 function get_nn_correction(p, X_state)
