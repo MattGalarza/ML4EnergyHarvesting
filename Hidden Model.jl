@@ -96,6 +96,7 @@ function hidden_physics_model!(du, u, p, t, current_acceleration)
     du[8] = F4_total / m4
 end
 
+
 # --------------------------------------- External Force ------------------------------------
 
 # Sine Wave External Force
