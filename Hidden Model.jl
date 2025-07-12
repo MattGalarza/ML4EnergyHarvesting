@@ -395,62 +395,81 @@ nn_params, st = Lux.setup(rng, U)
 const _st = st
 
 # Combine physical and neural parameters into a ComponentArray
-p_combined = ComponentArray(physical = p_true, neural = ComponentArray(nn_params))
-n_physical = length(p_true) # Store original structure for reference
+p_ude = ComponentArray(physical = p_true, neural = ComponentArray(nn_params))
 
 # Define UDE dynamics with normalized states
 function ude_dynamics!(du, u, p, t)
-    # Extract parameters directly from ComponentArray
-    p_current = p.physical # Physical parameters
-    nn_params_current = p.neural # Neural network parameters
+    # Extract parameters
+    p_phys = p.physical
+    p_nn = p.neural
     
-    # Get NN correction terms
-    nn_correction = U(u, nn_params_current, _st)[1]
+    # Get current external force (normalized)
+    Fext_current = Fext_input(t)
+    Fext_norm_current = normalizer(Fext_current, norm_bounds.Fext...)
     
-    # Add NN correction to the analytical model
-    lorenz!(du, u, p_current, t)
-    du .+= nn_correction
-
     # Denormalize states for analytical model
     u_denorm = [
-        denormalizer(u[1], x1_min, x1_max),
-        denormalizer(u[2], x1dot_min, x1dot_max),
-        denormalizer(u[3], x2_min, x2_max),
-        denormalizer(u[4], x2dot_min, x2dot_max),
-        denormalizer(u[5], Qvar_min, Qvar_max),
-        denormalizer(u[6], V_min, V_max)
+        denormalizer(u[1], norm_bounds.x1...),  
+        denormalizer(u[2], norm_bounds.v1...),  
+        denormalizer(u[3], norm_bounds.x2...),
+        denormalizer(u[4], norm_bounds.v2...),  
+        denormalizer(u[5], norm_bounds.x3...), 
+        denormalizer(u[6], norm_bounds.v3...),  
+        denormalizer(u[7], norm_bounds.x4...), 
+        denormalizer(u[8], norm_bounds.v4...)  
     ]
     
-    # Get analytical model derivatives using modified parameters
-    du_model = similar(du)
-    hidden_model!(du_model, u_denorm, p_current, t, current_acceleration)
+    # Get analytical model derivatives
+    du_analytical = zeros(8)
+    hidden_model!(du_analytical, u_denorm, p_phys, t, Fext_current)
     
-    # Normalize the model derivatives
-    correction_scales = [
-        (x1_max - x1_min),
-        (x1dot_max - x1dot_min),
-        (x2_max - x2_min),
-        (x2dot_max - x2dot_min),
-        (Qvar_max - Qvar_min),
-        (V_max - V_min)
+    # Normalize the analytical derivatives
+    du_analytical_norm = [
+        normalizer(du_analytical[1], -maximum(abs.(v1_1)), maximum(abs.(v1_1))), 
+        normalizer(du_analytical[2], -maximum(abs.([u[2] for u in sol1.u] ./ [u[1] for u in sol1.u])), 
+                  maximum(abs.([u[2] for u in sol1.u] ./ [u[1] for u in sol1.u]))), 
+        normalizer(du_analytical[3], -maximum(abs.(v2_1)), maximum(abs.(v2_1))),  
+        normalizer(du_analytical[4], -maximum(abs.([u[4] for u in sol1.u] ./ [u[3] for u in sol1.u])), 
+                  maximum(abs.([u[4] for u in sol1.u] ./ [u[3] for u in sol1.u]))),  
+        normalizer(du_analytical[5], -maximum(abs.(v3_1)), maximum(abs.(v3_1))), 
+        normalizer(du_analytical[6], -maximum(abs.([u[6] for u in sol1.u] ./ [u[5] for u in sol1.u])), 
+                  maximum(abs.([u[6] for u in sol1.u] ./ [u[5] for u in sol1.u]))),
+        normalizer(du_analytical[7], -maximum(abs.(v4_1)), maximum(abs.(v4_1))),  
+        normalizer(du_analytical[8], -maximum(abs.([u[8] for u in sol1.u] ./ [u[7] for u in sol1.u])), 
+                  maximum(abs.([u[8] for u in sol1.u] ./ [u[7] for u in sol1.u])))  
     ]
-    du_model_norm = du_model ./ correction_scales
     
-    # Neural network prediction
-    nn_input = vcat(u, acc_norm)
-    nn_correction = U(nn_input, p.neural, _st)[1]
+    # Get neural network corrections
+    nn_input = vcat(u, Fext_norm_current)
+    nn_corrections = U(nn_input, p_nn, _st)[1]
     
-    # Combine normalized derivatives
-    du .= du_model_norm + nn_correction
+    # Combine analytical model + neural corrections
+    du .= du_analytical_norm .+ nn_corrections
 end
 
+# Define the UDE problem with normalized initial conditions
+u0_norm = [
+    normalizer(u0[1], norm_bounds.x1...),
+    normalizer(u0[2], norm_bounds.v1...),
+    normalizer(u0[3], norm_bounds.x2...),
+    normalizer(u0[4], norm_bounds.v2...),
+    normalizer(u0[5], norm_bounds.x3...),
+    normalizer(u0[6], norm_bounds.v3...),
+    normalizer(u0[7], norm_bounds.x4...),
+    normalizer(u0[8], norm_bounds.v4...)
+]
+
 # Define the problem
-prob_nn = ODEProblem(ude_dynamics!, u0, tspan, p_combined)
+prob_nn = ODEProblem(ude_dynamics!, u0_norm, tspan, p_ude)
+
+# Create training data from solutions
+t_data = t1
+X_data = u2_norm'
 
 # Prediction function
-function predict(p, X = u0, T = t_data)
+function predict(p, X = u0_norm, T = t_data)
     _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = p)
-    pred = solve(_prob, Rosenbrock23(), saveat = T, abstol = 1e-6, reltol = 1e-6,
+    pred = solve(_prob, Rosenbrock23(), saveat = T, abstol = 1e-6, reltol = 1e-9,
             sensealg = QuadratureAdjoint(autojacvec = ReverseDiffVJP(true)))
     return Array(pred)
 end
@@ -458,80 +477,26 @@ end
 # Loss function
 function loss(p)
     u_pred = predict(p)
-    return mean(abs2, X_noisy - u_pred)
+    return mean(abs2, X_data - u_pred)
 end
 
 # Simple callback
 losses = Float64[]
-callback = function (state, l)
+callback = function(state, l)
     push!(losses, l)
     if length(losses) % 10 == 0
-        # Extract current model parameters for monitoring
-        p_current = state.u.physical  # Access parameters through state.u
+        # Print epoch losses
         println("Iteration $(length(losses)): Loss = $(l)")
-        println("Current p: [$(round(p_current[1], digits=3)), $(round(p_current[2], digits=3)), $(round(p_current[3], digits=3))]")
-        println("True p: [$(p_true[1]), $(p_true[2]), $(round(p_true[3], digits=3))]")
     end
     return false
 end
 
 # Optimization setup
 optf = OptimizationFunction((p, _) -> loss(p), Optimization.AutoZygote())
-optprob = OptimizationProblem(optf, p_combined)
+optprob = OptimizationProblem(optf, p_ude)
 
 # Start optimization
 println("\nStarting optimization...")
-res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 100)
+res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 250)
 println("\nOptimization complete!")
 println("Final loss: ", losses[end])
-
-# Extract final parameters
-p_final = res.u.physical
-
-println("\nFinal Results:")
-println("True parameters: ", p_true)
-println("Initial parameters: ", p_init)
-println("Final parameters: ", [round(p, digits=3) for p in p_final])
-println("Parameter errors: ", [round(abs(p_true[i] - p_final[i]), digits=3) for i in 1:3])
-
-# Test the trained model
-u_pred_final = predict(res.u)
-
-# Compare all results (clean, noisy, and prediction)
-p9 = plot(t_data, X_clean[1,:], label="True (clean)", xlabel="t", ylabel="x", linewidth=2, color=:black)
-scatter!(p9, t_data[1:5:end], X_noisy[1,1:5:end], label="Noisy data", color=:red, alpha=0.6, markersize=3)
-plot!(p9, t_data, u_pred_final[1,:], label="UDE prediction", linestyle=:dash, linewidth=2, color=:blue)
-title!("X Component Comparison")
-display(p9)
-
-p10 = plot(t_data, X_clean[2,:], label="True (clean)", xlabel="t", ylabel="y", linewidth=2, color=:black)
-scatter!(p10, t_data[1:5:end], X_noisy[2,1:5:end], label="Noisy data", color=:red, alpha=0.6, markersize=3)
-plot!(p10, t_data, u_pred_final[2,:], label="UDE prediction", linestyle=:dash, linewidth=2, color=:blue)
-title!("Y Component Comparison")
-display(p10)
-
-p11 = plot(t_data, X_clean[3,:], label="True (clean)", xlabel="t", ylabel="z", linewidth=2, color=:black)
-scatter!(p11, t_data[1:5:end], X_noisy[3,1:5:end], label="Noisy data", color=:red, alpha=0.6, markersize=3)
-plot!(p11, t_data, u_pred_final[3,:], label="UDE prediction", linestyle=:dash, linewidth=2, color=:blue)
-title!("Z Component Comparison")
-display(p11)
-
-# NN correction terms
-function get_nn_correction(p, X_state)
-    return U(X_state, p.neural, _st)[1]
-end
-
-# Sample correction at a few time points
-correction_sample = [get_nn_correction(res.u, X_noisy[:, i]) for i in 1:10:length(t_data)]
-correction_matrix = hcat(correction_sample...)
-
-p_correction = plot(t_data[1:10:end], correction_matrix[1,:], label="NN correction x", 
-                   xlabel="t", ylabel="Correction", linewidth=2)
-plot!(p_correction, t_data[1:10:end], correction_matrix[2,:], label="NN correction y")
-plot!(p_correction, t_data[1:10:end], correction_matrix[3,:], label="NN correction z")
-title!("Neural Network Correction Terms")
-display(p_correction)
-
-println("Final loss: ", loss(res.u))
-println("Training completed successfully!")
-println("\nThe NN learned to correct for the differences between the analytical model and noisy data.")
