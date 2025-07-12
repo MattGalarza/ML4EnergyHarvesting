@@ -299,11 +299,6 @@ function create_embedding(x, m, τ)
 end
 
 
-
-
-
-
-
 # ----------------------------------------- Data Normalization -----------------------------------------
 
 # Define a function to normalize data
@@ -489,8 +484,6 @@ println("\nStarting optimization...")
 res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 100)
 println("\nOptimization complete!")
 println("Final loss: ", losses[end])
-
-# ------------------------------------ Results Analysis ------------------------------------
 
 # Extract final parameters
 p_final = res.u.physical
