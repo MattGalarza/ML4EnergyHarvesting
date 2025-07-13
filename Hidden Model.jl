@@ -284,15 +284,19 @@ display(p_combined9)
 
 # ------------------------------------ State Reconstruction from Taken's Embedding Theorem --------------------------------
 
+# Define parameters for embedding
+m = 3 # Embedding dimension
+tau = 1 # Time delay
+
 # Define a function to create embedding
-function create_embedding(x, m, τ)
-    N = length(x) 
-    M = N - (m-1) * τ
+function create_embedding(x, m, tau)
+    N = length(x)
+    M = N - (m-1) * tau
     embedding = zeros(M, m)
 
     for i in 1:M
         for j in 1:m
-            embedding[i, j] = x[i + (j-1) * τ]
+            embedding[i, j] = x[i + (j-1) * tau]
         end
     end
     return embedding
