@@ -281,93 +281,11 @@ display(p_combined9)
 
 
 
-
-# ----------------------------------------- Data Normalization -----------------------------------------
-
-# Define a function to normalize data
-function normalizer(data, min_val, max_val, new_min::Float64 = -1.0, new_max::Float64 = 1.0)
-    return new_min .+ (data .- min_val) .* (new_max - new_min) ./ (max_val - min_val)
-end
-
-# Define a function to denormalize data
-function denormalizer(norm_data, min_val, max_val, new_min::Float64 = -1.0, new_max::Float64 = 1.0)
-    return min_val .+ (norm_data .- new_min) .* (max_val - min_val) ./ (new_max - new_min)
-end
-
-# Calculate min and max values from state data
-x1_min, x1_max = min(minimum(x1_1), minimum(x1_2)), max(maximum(x1_1), maximum(x1_2))
-v1_min, v1_max = min(minimum(v1_1), minimum(v1_2)), max(maximum(v1_1), maximum(v1_2))
-x2_min, x2_max = min(minimum(x2_1), minimum(x2_2)), max(maximum(x2_1), maximum(x2_2))
-v2_min, v2_max = min(minimum(v2_1), minimum(v2_2)), max(maximum(v2_1), maximum(v2_2))
-x3_min, x3_max = min(minimum(x3_1), minimum(x3_2)), max(maximum(x3_1), maximum(x3_2))
-v3_min, v3_max = min(minimum(v3_1), minimum(v3_2)), max(maximum(v3_1), maximum(v3_2))
-x4_min, x4_max = min(minimum(x4_1), minimum(x4_2)), max(maximum(x4_1), maximum(x4_2))
-v4_min, v4_max = min(minimum(v4_1), minimum(v4_2)), max(maximum(v4_1), maximum(v4_2))
-Fext_val = [Fext_input(tt) for tt in t1]        
-Fext_min, Fext_max = minimum(Fext_val), maximum(Fext_val)
-
-# Store normalization bounds
-norm_bounds = (
-    x1 = (x1_min, x1_max),
-    v1 = (v1_min, v1_max),
-    x2 = (x2_min, x2_max),
-    v2 = (v2_min, v2_max),
-    x3 = (x3_min, x3_max),
-    v3 = (v3_min, v3_max),
-    x4 = (x4_min, x4_max),
-    v4 = (v4_min, v4_max),
-    Fext = (Fext_min, Fext_max)
-)
-
-# Print bounds for verification
-println("Calculated normalization bounds:")
-println("x1: [$x1_min, $x1_max]")
-println("v1: [$v1_min, $v1_max]")
-println("x2: [$x2_min, $x2_max]")
-println("v2: [$v2_min, $v2_max]")
-println("x3: [$x3_min, $x3_max]")
-println("v3: [$v3_min, $v3_max]")
-println("x4: [$x4_min, $x4_max]")
-println("v4: [$v4_min, $v4_max]")
-println("Fext: [$Fext_min, $Fext_max]")
-
-# Normalize solution data
-# Hidden model (sol1)
-x1_1_norm = normalizer(x1_1, norm_bounds.x1...)
-v1_1_norm = normalizer(v1_1, norm_bounds.v1...)
-x2_1_norm = normalizer(x2_1, norm_bounds.x2...)
-v2_1_norm = normalizer(v2_1, norm_bounds.v2...)
-x3_1_norm = normalizer(x3_1, norm_bounds.x3...)
-v3_1_norm = normalizer(v3_1, norm_bounds.v3...)
-x4_1_norm = normalizer(x4_1, norm_bounds.x4...)
-v4_1_norm = normalizer(v4_1, norm_bounds.v4...)
-
-# Hidden physics model (sol2)
-x1_2_norm = normalizer(x1_2, norm_bounds.x1...)
-v1_2_norm = normalizer(v1_2, norm_bounds.v1...)
-x2_2_norm = normalizer(x2_2, norm_bounds.x2...)
-v2_2_norm = normalizer(v2_2, norm_bounds.v2...)
-x3_2_norm = normalizer(x3_2, norm_bounds.x3...)
-v3_2_norm = normalizer(v3_2, norm_bounds.v3...)
-x4_2_norm = normalizer(x4_2, norm_bounds.x4...)
-v4_2_norm = normalizer(v4_2, norm_bounds.v4...)
-Fext_norm = normalizer(Fext_val, norm_bounds.Fext...)
-
-# Create normalized state matrices
-u1_norm = hcat(x1_1_norm, v1_1_norm, x2_1_norm, v2_1_norm, x3_1_norm, v3_1_norm, x4_1_norm, v4_1_norm)
-u2_norm = hcat(x1_2_norm, v1_2_norm, x2_2_norm, v2_2_norm, x3_2_norm, v3_2_norm, x4_2_norm, v4_2_norm)
-
-println()
-println("Normalized state matrices shapes:")
-println("Hidden model states: ", size(u1_norm))
-println("Hidden physics states: ", size(u2_norm))
-println("External force: ", size(Fext_norm))
-
 # ------------------------------------ State Reconstruction from Taken's Embedding Theorem --------------------------------
 
 # Define parameters for embedding
 m = 17 # Embedding dimension (m >= 2d + 1) where d is the system's dimension
-tau = 2000 # Time delay
+tau = 2000 # Time delay, determine from autocorrelation
 
 # Define a function to create embedding
 function create_embedding(x, m, tau)
@@ -451,47 +369,91 @@ autocorr = autocorrelation(x, 1000, input_signal)
 # Forced system (remove forcing to see intrinsic dynamics)
 autocorr = autocorrelation(x, 1000, input_signal, remove_forcing=true)
 
+# ----------------------------------------- Data Normalization -----------------------------------------
+
+# Define a function to normalize data
+function normalizer(data, min_val, max_val, new_min::Float64 = -1.0, new_max::Float64 = 1.0)
+    return new_min .+ (data .- min_val) .* (new_max - new_min) ./ (max_val - min_val)
+end
+
+# Define a function to denormalize data
+function denormalizer(norm_data, min_val, max_val, new_min::Float64 = -1.0, new_max::Float64 = 1.0)
+    return min_val .+ (norm_data .- new_min) .* (max_val - min_val) ./ (new_max - new_min)
+end
+
+x1_min, x1_max = -0.1, 0.1          
+v1_min, v1_max = -1.0, 1.0          
+x2_min, x2_max = -0.02, 0.02  
+v2_min, v2_max = -0.2, 0.2     
+x3_min, x3_max = -0.02, 0.02      
+v3_min, v3_max = -0.1, 0.1         
+x4_min, x4_max = -0.002, 0.002     
+v4_min, v4_max = -0.01, 0.01     
+
+# Store normalization bounds
+norm_bounds = (
+    x1 = (x1_min, x1_max),
+    v1 = (v1_min, v1_max),
+    x2 = (x2_min, x2_max),
+    v2 = (v2_min, v2_max),
+    x3 = (x3_min, x3_max),
+    v3 = (v3_min, v3_max),
+    x4 = (x4_min, x4_max),
+    v4 = (v4_min, v4_max),
+    Fext = (-15.0, 15.0)
+)
+
+# Normalize solution data
+# Hidden model (sol1)
+x1_1_norm = normalizer(x1_1, norm_bounds.x1...)
+v1_1_norm = normalizer(v1_1, norm_bounds.v1...)
+x2_1_norm = normalizer(x2_1, norm_bounds.x2...)
+v2_1_norm = normalizer(v2_1, norm_bounds.v2...)
+x3_1_norm = normalizer(x3_1, norm_bounds.x3...)
+v3_1_norm = normalizer(v3_1, norm_bounds.v3...)
+x4_1_norm = normalizer(x4_1, norm_bounds.x4...)
+v4_1_norm = normalizer(v4_1, norm_bounds.v4...)
+
+# Hidden physics model (sol2)
+x1_2_norm = normalizer(x1_2, norm_bounds.x1...)
+v1_2_norm = normalizer(v1_2, norm_bounds.v1...)
+x2_2_norm = normalizer(x2_2, norm_bounds.x2...)
+v2_2_norm = normalizer(v2_2, norm_bounds.v2...)
+x3_2_norm = normalizer(x3_2, norm_bounds.x3...)
+v3_2_norm = normalizer(v3_2, norm_bounds.v3...)
+x4_2_norm = normalizer(x4_2, norm_bounds.x4...)
+v4_2_norm = normalizer(v4_2, norm_bounds.v4...)
+Fext_norm = normalizer(Fext_val, norm_bounds.Fext...)
+
+# Create normalized state matrices
+u1_norm = hcat(x1_1_norm, v1_1_norm, x2_1_norm, v2_1_norm, x3_1_norm, v3_1_norm, x4_1_norm, v4_1_norm)
+u2_norm = hcat(x1_2_norm, v1_2_norm, x2_2_norm, v2_2_norm, x3_2_norm, v3_2_norm, x4_2_norm, v4_2_norm)
+
+# Displacement plots (normalized)
+p25 = plot(t1, [x1_1_norm x1_2_norm], ylabel = "x1 (m)", title = "Displacement (Normalized)", label = ["HM" "HM + Physics"], seriescolor = [1 :black], 
+            linestyle = [:solid :dash], palette = :Dark2_5, legend = :topright, legendfontsize = 6)
+p26 = plot(t1, [x2_1_norm x2_2_norm], ylabel = "x2 (m)", label = ["HM" "HM + Physics"], seriescolor = [2 :black], linestyle = [:solid :dash], 
+            palette = :Dark2_5, legend = :topright, legendfontsize = 6)
+p27 = plot(t1, [x3_1_norm x3_2_norm], ylabel = "x3 (m)", label = ["HM" "HM + Physics"], seriescolor = [3 :black], linestyle = [:solid :dash], 
+            palette = :Dark2_5, legend = :topright, legendfontsize = 6)
+p28 = plot(t1, [x4_1_norm x4_2_norm], xlabel = "Time (s)", ylabel = "x4 (m)", label = ["HM" "HM + Physics"], seriescolor = [4 :black],
+            linestyle = [:solid :dash], palette = :Dark2_5, legend = :topright, legendfontsize = 6)
+p_combined7 = plot(p25, p26, p27, p28, layout = (4, 1), size = (800, 600))
+display(p_combined7)
+
+# Velocity plots (normalized)
+p29 = plot(t1, [v1_1_norm v1_2_norm], ylabel = "v1 (m)", title = "Velocity (Normalized)", label = ["HM" "HM + Physics"], seriescolor = [1 :black], 
+            linestyle = [:solid :dash], palette = :Dark2_5, legend = :topright, legendfontsize = 6)
+p30 = plot(t1, [v2_1_norm v2_2_norm], ylabel = "v2 (m)", label = ["HM" "HM + Physics"], seriescolor = [2 :black], linestyle = [:solid :dash], 
+            palette = :Dark2_5, legend = :topright, legendfontsize = 6)
+p31 = plot(t1, [v3_1_norm v3_2_norm], ylabel = "v3 (m)", label = ["HM" "HM + Physics"], seriescolor = [3 :black], linestyle = [:solid :dash], 
+            palette = :Dark2_5, legend = :topright, legendfontsize = 6)
+p32 = plot(t1, [v4_1_norm v4_2_norm], xlabel = "Time (s)", ylabel = "v4 (m)", label = ["HM" "HM + Physics"], seriescolor = [4 :black], 
+            linestyle = [:solid :dash], palette = :Dark2_5, legend = :topright, legendfontsize = 6)
+p_combined8 = plot(p29, p30, p31, p32, layout = (4, 1), size = (800, 600))
+display(p_combined8)
+
 # ----------------------------------------- Neural ODE/UDE -----------------------------------------
-
-println("Normalization ranges:")
-for (name, bounds) in pairs(norm_bounds)
-    range_val = bounds[2] - bounds[1]
-    println("$name: [$(bounds[1]), $(bounds[2])] → range = $range_val")
-end
-
-# Test the analytical model in isolation
-function test_analytical_model()
-    t_test = 1.0
-    u_test = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]  # Small test values
-    du_test = zeros(8)
-    
-    hidden_model!(du_test, u_test, p_true, t_test, Fext_input(t_test))
-    
-    println("Analytical derivatives: ", du_test)
-    println("Max derivative: ", maximum(abs.(du_test)))
-    
-    return du_test
-end
-
-du_analytical_test = test_analytical_model()
-
-# Test the neural network
-function test_neural_network()
-    u_test = randn(8) * 0.1  # Small random normalized states
-    Fext_test = 0.1
-    nn_input = vcat(u_test, Fext_test)
-    
-    nn_output = U(nn_input, p_ude.neural, _st)[1]
-    
-    println("Neural network input: ", nn_input)
-    println("Neural network output: ", nn_output)
-    println("Max NN output: ", maximum(abs.(nn_output)))
-    
-    return nn_output
-end
-
-nn_test = test_neural_network()
-
 
 # Deep NN chain, ReLu activation function
 const U = Lux.Chain(Lux.Dense(9, 32, relu), # 9 inputs: 8 states + 1 input force
@@ -535,16 +497,17 @@ function ude_dynamics!(du, u, p, t)
     hidden_model!(du_analytical, u_denorm, p_phys, t, Fext_current)
     
     # Normalize the analytical derivatives
-    du_analytical_norm = [
-        du_analytical[1] * 2.0 / (norm_bounds.v1[2] - norm_bounds.v1[1]), 
-        du_analytical[2] * 2.0 / (norm_bounds.x1[2] - norm_bounds.x1[1]),  
-        du_analytical[3] * 2.0 / (norm_bounds.v2[2] - norm_bounds.v2[1]),  
-        du_analytical[4] * 2.0 / (norm_bounds.x2[2] - norm_bounds.x2[1]), 
-        du_analytical[5] * 2.0 / (norm_bounds.v3[2] - norm_bounds.v3[1]), 
-        du_analytical[6] * 2.0 / (norm_bounds.x3[2] - norm_bounds.x3[1]),  
-        du_analytical[7] * 2.0 / (norm_bounds.v4[2] - norm_bounds.v4[1]),  
-        du_analytical[8] * 2.0 / (norm_bounds.x4[2] - norm_bounds.x4[1])  
+    correction_scales = [
+        (norm_bounds.x1[2] - norm_bounds.x1[1]),
+        (norm_bounds.v1[2] - norm_bounds.v1[1]),  
+        (norm_bounds.x2[2] - norm_bounds.x2[1]),  
+        (norm_bounds.v2[2] - norm_bounds.v2[1]),   
+        (norm_bounds.x3[2] - norm_bounds.x3[1]), 
+        (norm_bounds.v3[2] - norm_bounds.v3[1]),   
+        (norm_bounds.x4[2] - norm_bounds.x4[1]),  
+        (norm_bounds.v4[2] - norm_bounds.v4[1])   
     ]
+    du_analytical_norm = du_analytical ./ correction_scales
     
     # Get neural network corrections
     nn_input = vcat(u, Fext_norm_current)
@@ -562,7 +525,7 @@ prob_nn = ODEProblem(ude_dynamics!, u0_norm, tspan, p_ude)
 
 # Create training data from solutions
 t_data = t1
-X_data = u2_norm'
+X_data = u2_norm
 
 # Prediction function
 function predict(p, X = u0_norm, T = t_data)
@@ -575,7 +538,7 @@ end
 # Loss function
 function loss(p)
     u_pred = predict(p)
-    return mean(abs2, X_data - u_pred)
+    return mean(abs2, X_data .- u_pred)
 end
 
 # Simple callback
