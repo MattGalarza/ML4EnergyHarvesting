@@ -282,26 +282,6 @@ display(p_combined9)
 
 
 
-# ------------------------------------ State Reconstruction from Taken's Embedding Theorem --------------------------------
-
-# Define parameters for embedding
-m = 3 # Embedding dimension
-tau = 1 # Time delay
-
-# Define a function to create embedding
-function create_embedding(x, m, tau)
-    N = length(x)
-    M = N - (m-1) * tau
-    embedding = zeros(M, m)
-
-    for i in 1:M
-        for j in 1:m
-            embedding[i, j] = x[i + (j-1) * tau]
-        end
-    end
-    return embedding
-end
-
 # ----------------------------------------- Data Normalization -----------------------------------------
 
 # Define a function to normalize data
@@ -383,7 +363,135 @@ println("Hidden model states: ", size(u1_norm))
 println("Hidden physics states: ", size(u2_norm))
 println("External force: ", size(Fext_norm))
 
+# ------------------------------------ State Reconstruction from Taken's Embedding Theorem --------------------------------
+
+# Define parameters for embedding
+m = 17 # Embedding dimension (m >= 2d + 1) where d is the system's dimension
+tau = 2000 # Time delay
+
+# Define a function to create embedding
+function create_embedding(x, m, tau)
+    N = length(x)
+    M = N - (m-1) * tau 
+    embedding = zeros(M, m)
+
+    for i in 1:M
+        for j in 1:m
+            embedding[i, j] = x[i + (j-1) * tau]
+        end
+    end
+    return embedding
+end
+
+# Define a function to create Hankel matrix
+function create_hankel(x, m)
+    N = length(x)
+    L = m  # Window length
+    K = N - L + 1  # Number of columns
+    
+    H = zeros(L, K)
+    for i in 1:L
+        for j in 1:K
+            H[i, j] = x[i + j - 1]
+        end
+    end
+    return H
+end
+
+# Define an autocorrelation function
+function autocorrelation(x, lag, input)
+    N = length(x)
+    x_centered = x .- mean(x)
+    autocorr = zeros(lag + 1)
+    
+    autocorr[1] = 1.0
+    
+    for tau in 1:lag
+        x1 = x_centered[1:end-tau]
+        x2 = x_centered[tau+1:end]
+        autocorr[tau + 1] = cor(x1, x2)
+    end
+    return autocorr
+end
+
+function autocorrelation(x, lag, input=nothing; remove_forcing=false)
+    # Determine which signal to analyze
+    if input !== nothing && remove_forcing && length(input) == length(x)
+        # Remove forcing component using linear regression
+        X = [ones(length(input)) input]
+        coeffs = X \ x
+        x_analysis = x - X * coeffs
+    else
+        x_analysis = x
+    end
+    
+    # Standard autocorrelation computation
+    N = length(x_analysis)
+    x_centered = x_analysis .- mean(x_analysis)
+    autocorr = zeros(lag + 1)
+    
+    autocorr[1] = 1.0 
+    for tau in 1:lag
+        x1 = x_centered[1:end-tau]
+        x2 = x_centered[tau+1:end]
+        autocorr[tau + 1] = cor(x1, x2)
+    end
+    return autocorr
+end
+
+x = x4_1
+U, S, V = svd(create_hankel(x, m))
+p37 = plot(diagm(S)/(sum(diagm(S))), title = "Singular Values of Hankel Matrix", xlabel = "Index", ylabel = "Normalized Singular Value", legend = false, markershape = :circle, markersize = 3, size = (600, 400))
+
+input_signal = Fext_input.(t1)
+# Autonomous system
+autocorr = autocorrelation(x, 1000)
+# Forced system (forcing present in autocorr)
+autocorr = autocorrelation(x, 1000, input_signal)
+# Forced system (remove forcing to see intrinsic dynamics)
+autocorr = autocorrelation(x, 1000, input_signal, remove_forcing=true)
+
 # ----------------------------------------- Neural ODE/UDE -----------------------------------------
+
+println("Normalization ranges:")
+for (name, bounds) in pairs(norm_bounds)
+    range_val = bounds[2] - bounds[1]
+    println("$name: [$(bounds[1]), $(bounds[2])] → range = $range_val")
+end
+
+# Test the analytical model in isolation
+function test_analytical_model()
+    t_test = 1.0
+    u_test = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]  # Small test values
+    du_test = zeros(8)
+    
+    hidden_model!(du_test, u_test, p_true, t_test, Fext_input(t_test))
+    
+    println("Analytical derivatives: ", du_test)
+    println("Max derivative: ", maximum(abs.(du_test)))
+    
+    return du_test
+end
+
+du_analytical_test = test_analytical_model()
+
+# Test the neural network
+function test_neural_network()
+    u_test = randn(8) * 0.1  # Small random normalized states
+    Fext_test = 0.1
+    nn_input = vcat(u_test, Fext_test)
+    
+    nn_output = U(nn_input, p_ude.neural, _st)[1]
+    
+    println("Neural network input: ", nn_input)
+    println("Neural network output: ", nn_output)
+    println("Max NN output: ", maximum(abs.(nn_output)))
+    
+    return nn_output
+end
+
+nn_test = test_neural_network()
+
 
 # Deep NN chain, ReLu activation function
 const U = Lux.Chain(Lux.Dense(9, 32, relu), # 9 inputs: 8 states + 1 input force
