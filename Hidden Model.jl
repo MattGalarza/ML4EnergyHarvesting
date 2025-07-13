@@ -420,23 +420,21 @@ function ude_dynamics!(du, u, p, t)
     ]
     
     # Get analytical model derivatives
-    du_analytical = zeros(8)
+    du_analytical = similar(du)
     hidden_model!(du_analytical, u_denorm, p_phys, t, Fext_current)
     
     # Normalize the analytical derivatives
+    velocity_scale = 2.0
+    accel_scale = 100.0   
     du_analytical_norm = [
-        normalizer(du_analytical[1], -maximum(abs.(v1_1)), maximum(abs.(v1_1))), 
-        normalizer(du_analytical[2], -maximum(abs.([u[2] for u in sol1.u] ./ [u[1] for u in sol1.u])), 
-                  maximum(abs.([u[2] for u in sol1.u] ./ [u[1] for u in sol1.u]))), 
-        normalizer(du_analytical[3], -maximum(abs.(v2_1)), maximum(abs.(v2_1))),  
-        normalizer(du_analytical[4], -maximum(abs.([u[4] for u in sol1.u] ./ [u[3] for u in sol1.u])), 
-                  maximum(abs.([u[4] for u in sol1.u] ./ [u[3] for u in sol1.u]))),  
-        normalizer(du_analytical[5], -maximum(abs.(v3_1)), maximum(abs.(v3_1))), 
-        normalizer(du_analytical[6], -maximum(abs.([u[6] for u in sol1.u] ./ [u[5] for u in sol1.u])), 
-                  maximum(abs.([u[6] for u in sol1.u] ./ [u[5] for u in sol1.u]))),
-        normalizer(du_analytical[7], -maximum(abs.(v4_1)), maximum(abs.(v4_1))),  
-        normalizer(du_analytical[8], -maximum(abs.([u[8] for u in sol1.u] ./ [u[7] for u in sol1.u])), 
-                  maximum(abs.([u[8] for u in sol1.u] ./ [u[7] for u in sol1.u])))  
+        du_analytical[1] / velocity_scale, 
+        du_analytical[2] / accel_scale,     
+        du_analytical[3] / velocity_scale, 
+        du_analytical[4] / accel_scale,     
+        du_analytical[5] / velocity_scale,  
+        du_analytical[6] / accel_scale,     
+        du_analytical[7] / velocity_scale,  
+        du_analytical[8] / accel_scale      
     ]
     
     # Get neural network corrections
@@ -497,6 +495,6 @@ optprob = OptimizationProblem(optf, p_ude)
 
 # Start optimization
 println("\nStarting optimization...")
-res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 250)
+res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 20)
 println("\nOptimization complete!")
 println("Final loss: ", losses[end])
