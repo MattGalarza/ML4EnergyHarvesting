@@ -424,17 +424,15 @@ function ude_dynamics!(du, u, p, t)
     hidden_model!(du_analytical, u_denorm, p_phys, t, Fext_current)
     
     # Normalize the analytical derivatives
-    velocity_scale = 2.0
-    accel_scale = 100.0   
     du_analytical_norm = [
-        du_analytical[1] / velocity_scale, 
-        du_analytical[2] / accel_scale,     
-        du_analytical[3] / velocity_scale, 
-        du_analytical[4] / accel_scale,     
-        du_analytical[5] / velocity_scale,  
-        du_analytical[6] / accel_scale,     
-        du_analytical[7] / velocity_scale,  
-        du_analytical[8] / accel_scale      
+        du_analytical[1] * 2.0 / (norm_bounds.v1[2] - norm_bounds.v1[1]), 
+        du_analytical[2] * 2.0 / (norm_bounds.x1[2] - norm_bounds.x1[1]),  
+        du_analytical[3] * 2.0 / (norm_bounds.v2[2] - norm_bounds.v2[1]),  
+        du_analytical[4] * 2.0 / (norm_bounds.x2[2] - norm_bounds.x2[1]), 
+        du_analytical[5] * 2.0 / (norm_bounds.v3[2] - norm_bounds.v3[1]), 
+        du_analytical[6] * 2.0 / (norm_bounds.x3[2] - norm_bounds.x3[1]),  
+        du_analytical[7] * 2.0 / (norm_bounds.v4[2] - norm_bounds.v4[1]),  
+        du_analytical[8] * 2.0 / (norm_bounds.x4[2] - norm_bounds.x4[1])  
     ]
     
     # Get neural network corrections
@@ -446,16 +444,7 @@ function ude_dynamics!(du, u, p, t)
 end
 
 # Define the UDE problem with normalized initial conditions
-u0_norm = [
-    normalizer(u0[1], norm_bounds.x1...),
-    normalizer(u0[2], norm_bounds.v1...),
-    normalizer(u0[3], norm_bounds.x2...),
-    normalizer(u0[4], norm_bounds.v2...),
-    normalizer(u0[5], norm_bounds.x3...),
-    normalizer(u0[6], norm_bounds.v3...),
-    normalizer(u0[7], norm_bounds.x4...),
-    normalizer(u0[8], norm_bounds.v4...)
-]
+u0_norm = u0 # All ICs are zero so already normalized
 
 # Define the problem
 prob_nn = ODEProblem(ude_dynamics!, u0_norm, tspan, p_ude)
