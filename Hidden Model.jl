@@ -365,6 +365,22 @@ p37 = plot(diagm(S)/(sum(diagm(S))), title = "Singular Values of Hankel Matrix",
 autocorr1 = autocorrelation(x, 5000)
 p1 = plot(0:5000, autocorr1, title = "Autocorrelation of x4 (Autonomous)", xlabel = "Lag", ylabel = "Autocorrelation", legend = false, markershape = :circle, markersize = 3, size = (600, 400))
 
+
+# Look at different masses to see if any show higher rank
+for (i, mass_data) in enumerate([x1_1, x2_1, x3_1, x4_1])
+    H = create_hankel(mass_data[1:10000], 5)
+    U1, S, V = svd(H)
+    rank = sum((S/S[1]) .> 0.001)  # Lower threshold
+    println("Mass $i effective rank (0.001 threshold): $rank")
+end
+
+# Combine multiple variables to capture more complexity
+composite = x1_1 + 0.5*x2_1 + 0.3*x3_1 + 0.1*x4_1
+H_comp = create_hankel(composite[1:10000], 5)
+U1, S, V = svd(H_comp)
+rank = sum((S/S[1]) .> 0.001)
+println("Composite observable rank: $rank")
+
 # ----------------------------------------- Data Normalization -----------------------------------------
 
 # Define a function to normalize data
