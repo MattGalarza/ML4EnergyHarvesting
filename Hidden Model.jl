@@ -111,7 +111,7 @@ Fext_sine = t -> A * ramp(t) * sin(2 * π * f * t)
 # ------------------------------------- Set Input Force ------------------------------------
 
 # Set to `true` to use sine wave, `false` otherwise
-use_sine = true
+use_sine = false
 
 # Define Fext_input based on your choice
 if use_sine
@@ -123,7 +123,7 @@ end
 # ------------------------------------ Initialize Parameters --------------------------------
 
 # Initial conditions
-u0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+u0 = [1.0, 0.0, -0.74, 0.0, 0.350, 0.0, 1.120, 0.0]
 p_true = [12.0, 8.5, 10.0, 9.25, 125.0, 80.0, 93.0, 75.0, 0.5, 3.75, 4.5, 2.0]                
 tspan = (0.0, 20.0) # simulation length
 abstol = 1e-9 # absolute solver tolerance
@@ -285,7 +285,7 @@ display(p_combined9)
 
 # Define parameters for embedding
 m = 17 # Embedding dimension (m >= 2d + 1) where d is the system's dimension
-tau = 2000 # Time delay, determine from autocorrelation
+tau = 4500 # Time delay, determine from autocorrelation
 
 # Define a function to create embedding
 function create_embedding(x, m, tau)
@@ -317,7 +317,7 @@ function create_hankel(x, m)
 end
 
 # Define an autocorrelation function
-function autocorrelation(x, lag, input)
+function autocorrelation(x, lag)
     N = length(x)
     x_centered = x .- mean(x)
     autocorr = zeros(lag + 1)
@@ -358,16 +358,12 @@ function autocorrelation(x, lag, input=nothing; remove_forcing=false)
 end
 
 x = x4_1
-U, S, V = svd(create_hankel(x, m))
+U1, S, V = svd(create_hankel(x, m))
 p37 = plot(diagm(S)/(sum(diagm(S))), title = "Singular Values of Hankel Matrix", xlabel = "Index", ylabel = "Normalized Singular Value", legend = false, markershape = :circle, markersize = 3, size = (600, 400))
 
-input_signal = Fext_input.(t1)
 # Autonomous system
-autocorr = autocorrelation(x, 1000)
-# Forced system (forcing present in autocorr)
-autocorr = autocorrelation(x, 1000, input_signal)
-# Forced system (remove forcing to see intrinsic dynamics)
-autocorr = autocorrelation(x, 1000, input_signal, remove_forcing=true)
+autocorr1 = autocorrelation(x, 5000)
+p1 = plot(0:5000, autocorr1, title = "Autocorrelation of x4 (Autonomous)", xlabel = "Lag", ylabel = "Autocorrelation", legend = false, markershape = :circle, markersize = 3, size = (600, 400))
 
 # ----------------------------------------- Data Normalization -----------------------------------------
 
@@ -423,6 +419,7 @@ x3_2_norm = normalizer(x3_2, norm_bounds.x3...)
 v3_2_norm = normalizer(v3_2, norm_bounds.v3...)
 x4_2_norm = normalizer(x4_2, norm_bounds.x4...)
 v4_2_norm = normalizer(v4_2, norm_bounds.v4...)
+Fext_val = [Fext_input(tt) for tt in t1]
 Fext_norm = normalizer(Fext_val, norm_bounds.Fext...)
 
 # Create normalized state matrices
