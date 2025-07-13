@@ -298,7 +298,6 @@ function create_embedding(x, m, τ)
     return embedding
 end
 
-
 # ----------------------------------------- Data Normalization -----------------------------------------
 
 # Define a function to normalize data
