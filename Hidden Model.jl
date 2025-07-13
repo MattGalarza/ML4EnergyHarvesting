@@ -455,8 +455,8 @@ X_data = u2_norm'
 # Prediction function
 function predict(p, X = u0_norm, T = t_data)
     _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = p)
-    pred = solve(_prob, Rosenbrock23(), saveat = T, abstol = 1e-6, reltol = 1e-9,
-            sensealg = QuadratureAdjoint(autojacvec = ReverseDiffVJP(true)))
+    pred = solve(_prob, Rosenbrock23(), saveat = T, abstol = abstol, reltol = reltol, maxiters = 1e7, verbose = false)
+    # pred = solve(_prob, Rodas4(), saveat = T, abstol = abstol, reltol = reltol, sensealg = InterpolatingAdjoint(autojacvec = ZygoteVJP()), verbose = false)
     return Array(pred)
 end
 
