@@ -332,6 +332,7 @@ function autocorrelation(x, lag)
     return autocorr
 end
 
+
 function autocorrelation(x, lag, input=nothing; remove_forcing=false)
     # Determine which signal to analyze
     if input !== nothing && remove_forcing && length(input) == length(x)
