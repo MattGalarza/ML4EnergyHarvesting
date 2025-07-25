@@ -902,7 +902,7 @@ end
 true_states_matrix = hcat(x1_1, v1_1, x2_1, v2_1, x3_1, v3_1, x4_1, v4_1)
 
 # We want to reconstruct states 3-8 (x2, v2, x3, v3, x4, v4) from embedding of x1
-target_states = true_states_matrix[:, 3:8]  # Exclude x1 and v1
+target_states = true_states_matrix[:, 1:6]  # Exclude x1 and v1
 state_names = ["x2", "v2", "x3", "v3", "x4", "v4"]
 
 println("Attempting to reconstruct $(length(state_names)) hidden states from Takens embedding...")
@@ -917,7 +917,7 @@ function evaluate_reconstruction(predictions, true_values, method_name, state_na
     Compute reconstruction metrics for each state
     """
     println("\n$(method_name) Results:")
-    println("-" * length("$(method_name) Results:"))
+    println("-"^length("$(method_name) Results:"))  # Fixed: use ^ for string repetition
     
     n_states = size(predictions, 2)
     metrics = []
