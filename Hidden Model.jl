@@ -111,7 +111,7 @@ Fext_sine = t -> A * ramp(t) * sin(2 * π * f * t)
 # ------------------------------------- Set Input Force ------------------------------------
 
 # Set to `true` to use sine wave, `false` otherwise
-use_sine = false
+use_sine = true
 
 # Define Fext_input based on your choice
 if use_sine
@@ -123,7 +123,7 @@ end
 # ------------------------------------ Initialize Parameters --------------------------------
 
 # Initial conditions
-u0 = [1.0, 0.0, -0.74, 0.0, 0.350, 0.0, 1.120, 0.0]
+u0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 p_true = [12.0, 8.5, 10.0, 9.25, 125.0, 80.0, 93.0, 75.0, 0.5, 3.75, 4.5, 2.0]                
 tspan = (0.0, 20.0) # simulation length
 abstol = 1e-9 # absolute solver tolerance
