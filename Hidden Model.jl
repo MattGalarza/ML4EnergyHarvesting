@@ -442,7 +442,7 @@ prob_nn = ODEProblem(ude_dynamics!, u0_norm, tspan, p_ude)
 
 # Create training data from solutions
 t_data = t1
-X_data = u2_norm
+X_data = u2_norm'
 
 # Prediction function
 function predict(p, X = u0_norm, T = t_data)
@@ -455,7 +455,11 @@ end
 # Loss function
 function loss(p)
     u_pred = predict(p)
-    return mean(abs2, X_data .- u_pred)
+    if any(isnan, u_pred)
+        return Inf
+    end
+    scale_factor = 1
+    return scale_factor * mean(abs2, X_data .- u_pred)
 end
 
 # Simple callback
@@ -478,3 +482,150 @@ println("\nStarting optimization...")
 res = solve(optprob, OptimizationOptimisers.Adam(0.01), callback = callback, maxiters = 20)
 println("\nOptimization complete!")
 println("Final loss: ", losses[end])
+
+# Plot final results
+println("\nGenerating final plots...")
+final_pred = predict(res.u)
+
+# Extract time data
+time_data = t_data
+
+# DEBUG: Check dimensions first
+println("Debugging dimensions:")
+println("Size of time_data (t_data): ", size(time_data))
+println("Size of X_data: ", size(X_data))
+println("Size of final_pred: ", size(final_pred))
+println("Length of time_data: ", length(time_data))
+println("Number of time points in X_data: ", size(X_data, 2))
+println("Number of time points in final_pred: ", size(final_pred, 2))
+
+# Fix dimension mismatch by finding the minimum length
+n_time_points = min(length(time_data), size(X_data, 2), size(final_pred, 2))
+println("Using n_time_points: ", n_time_points)
+
+# Trim all arrays to the same length
+time_plot = time_data[1:n_time_points]
+X_plot = X_data[:, 1:n_time_points]
+pred_plot = final_pred[:, 1:n_time_points]
+
+# Plot comparison for a specific state (e.g., state 4 which might be velocity)
+p1 = plot(time_plot, X_plot[4,:], label = "Training Data", xlabel = "Time (s)", ylabel = "Normalized State 4 (v2)")
+plot!(p1, time_plot, pred_plot[4,:], label = "UDE Prediction")
+title!(p1, "UDE Performance - State 4")
+display(p1)
+
+# Zoomed in view (last part of simulation)
+zoom_start = max(1, n_time_points ÷ 3)  # Last 2/3 of the data
+p2 = plot(time_plot[zoom_start:end], X_plot[4,zoom_start:end], label = "Training Data", 
+         xlabel = "Time (s)", ylabel = "Normalized State 4 (v2)")
+plot!(p2, time_plot[zoom_start:end], pred_plot[4,zoom_start:end], label = "UDE Prediction")
+title!(p2, "UDE Performance - State 4 (Zoomed)")
+display(p2)
+
+# State labels for your 8-state system
+println("\nPlotting trajectories comparison...")
+p_traj = plot(layout=(4,2), size=(1200,1000))
+state_labels = ["x1", "v1", "x2", "v2", "x3", "v3", "x4", "v4"]
+
+# Plot each state
+for i in 1:8
+    plot!(p_traj[i], time_plot, X_plot[i,:], label = "Training Data", 
+          xlabel = "Time (s)", ylabel = "Normalized "*state_labels[i])
+    plot!(p_traj[i], time_plot, pred_plot[i,:], label = "UDE Prediction")
+    title!(p_traj[i], state_labels[i])
+end
+suptitle = plot(title = "State Trajectories: Training Data vs UDE", grid = false, showaxis = false, bottom_margin = -50Plots.px)
+p_combined = plot(suptitle, p_traj, layout = @layout([A{0.01h}; B]))
+display(p_combined)
+
+# Loss vs Epochs
+p3 = plot(1:length(losses), losses, xlabel = "Epoch", ylabel = "Loss", label = "Training Loss")
+title!(p3, "Loss vs Epochs")
+display(p3)
+
+# Log scale loss plot (if helpful)
+p4 = plot(1:length(losses), losses, xlabel = "Epoch", ylabel = "Loss (log scale)", 
+         label = "Training Loss", yscale = :log10)
+title!(p4, "Loss vs Epochs (Log Scale)")
+display(p4)
+
+# Prediction vs actual for multiple key states
+p5 = plot(layout=(2,2), size=(1000,800))
+key_states = [1, 3, 5, 7]  # Position states
+key_labels = ["x1", "x2", "x3", "x4"]
+
+for (idx, state_idx) in enumerate(key_states)
+    plot!(p5[idx], time_plot, X_plot[state_idx,:], label = "Training Data", 
+          xlabel = "Time (s)", ylabel = "Normalized "*key_labels[idx])
+    plot!(p5[idx], time_plot, pred_plot[state_idx,:], label = "UDE Prediction")
+    title!(p5[idx], key_labels[idx])
+end
+suptitle2 = plot(title = "Key Position States: Training Data vs UDE Prediction", grid = false, showaxis = false, bottom_margin = -50Plots.px)
+p_combined2 = plot(suptitle2, p5, layout = @layout([A{0.01h}; B]))
+display(p_combined2)
+
+# Compute and plot prediction errors for each state
+println("\nComputing prediction errors...")
+p6 = plot(layout=(4,2), size=(1200,1000))
+
+for i in 1:8
+    error = pred_plot[i,:] .- X_plot[i,:]
+    plot!(p6[i], time_plot, error, xlabel = "Time (s)", ylabel = "Error", 
+          label = "Prediction Error", color = :red)
+    title!(p6[i], state_labels[i]*" Error")
+end
+suptitle3 = plot(title = "Prediction Errors for All States", grid = false, showaxis = false, bottom_margin = -50Plots.px)
+p_combined3 = plot(suptitle3, p6, layout = @layout([A{0.01h}; B]))
+display(p_combined3)
+
+# Compute and plot L2 norm error across all states
+l2_errors = zeros(n_time_points)
+for t in 1:n_time_points
+    # Compute L2 norm error across all states at each time point
+    error_vector = pred_plot[:,t] .- X_plot[:,t]
+    l2_errors[t] = sqrt(sum(error_vector.^2))
+end
+
+p7 = plot(time_plot, l2_errors, xlabel = "Time (s)", ylabel = "L2 Norm Error", 
+         label = "State Space Error", color = :purple, linewidth = 2)
+title!(p7, "L2 Norm Error Across All States")
+display(p7)
+
+# Individual state errors (RMS)
+state_rms_errors = zeros(8)
+state_max_errors = zeros(8)
+for i in 1:8
+    error = pred_plot[i,:] .- X_plot[i,:]
+    state_rms_errors[i] = sqrt(mean(error.^2))
+    state_max_errors[i] = maximum(abs.(error))
+end
+
+# Bar plot of RMS errors by state
+p8 = bar(state_labels, state_rms_errors, xlabel = "State", ylabel = "RMS Error", 
+        title = "RMS Error by State", legend = false, color = :orange)
+display(p8)
+
+# Bar plot of Max errors by state
+p9 = bar(state_labels, state_max_errors, xlabel = "State", ylabel = "Max Absolute Error", 
+        title = "Maximum Absolute Error by State", legend = false, color = :red)
+display(p9)
+
+# Print comprehensive error statistics
+println("\nError Statistics:")
+println("Overall L2 Error:")
+println("  Mean L2 Error: ", mean(l2_errors))
+println("  Max L2 Error: ", maximum(l2_errors))
+println("  Final L2 Error: ", l2_errors[end])
+
+println("\nPer-State RMS Errors:")
+for i in 1:8
+    println("  $(state_labels[i]): ", round(state_rms_errors[i], digits=6))
+end
+
+println("\nPer-State Max Absolute Errors:")
+for i in 1:8
+    println("  $(state_labels[i]): ", round(state_max_errors[i], digits=6))
+end
+
+println("\nFinal Training Loss: ", losses[end])
+println("Total Training Iterations: ", length(losses))
