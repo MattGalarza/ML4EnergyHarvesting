@@ -9,6 +9,7 @@
 
 \title{Addressing the Closure Problem: State Estimation and Neural Approaches for Partially Observable Dynamical Systems}
 \author{Matthew G. Galarza}
+\date{Last Updated: \today}
 % \date{\today}
 
 \begin{document}
@@ -20,7 +21,7 @@
 
 A fundamental challenge in the modeling of complex dynamical systems is one of closure where the evolution of the resolved variables depends on unresolved states, processes, and scales that are not directly accessible. This mismatch between the “true” system and its analytical or reduced approximation stems from partial observability, missing or inaccurate physics, and parameter uncertainty. The challenge is ubiqutous, appearing in a variety of diverse fields including turbulence modeling, climate science, molecular dynamics, and biological systems.
 
-\subsection{Mathematical Formulation}
+\subsection{General Mathematical Formulation}
 Consider a general dynamical system with state variables partitioned into resolved (observable) and unresolved (hidden) components:
 \begin{equation}
 \frac{d}{dt}\begin{bmatrix} \mathbf{u} \\ \mathbf{v} \end{bmatrix} = \begin{bmatrix} f(\mathbf{u}, \mathbf{v}, t) \\ g(\mathbf{u}, \mathbf{v}, t) \end{bmatrix}
@@ -34,24 +35,6 @@ The closure problem emerges because the right-hand side depends on the unobserva
 \frac{d\mathbf{u}}{dt} = f(\mathbf{u}, \mathcal{C}(\mathbf{u}, t), t)
 \end{equation}
 where $\mathcal{C}(\mathbf{u}, t)$ is the closure approximation that models the effect of unresolved variables.
-
-\subsection{Classical Approaches to Closure}
-
-\subsubsection{Statistical Closure}
-In turbulence modeling, Reynolds averaging leads to the Reynolds-Averaged Navier-Stokes (RANS) equations where the closure problem manifests as the Reynolds stress tensor. Classical approaches include:
-\begin{itemize}
-    \item \textbf{Eddy viscosity models}: Approximate unresolved stresses through enhanced dissipation
-    \item \textbf{Scale similarity models}: Assume self-similar behavior across scales
-    \item \textbf{Gradient transport models}: Model fluxes as proportional to mean gradients
-\end{itemize}
-
-\subsubsection{Phenomenological Closure}
-Many fields develop closure models based on physical reasoning:
-\begin{itemize}
-    \item \textbf{Subgrid-scale models}: In Large Eddy Simulation (LES), model energy cascade to unresolved scales
-    \item \textbf{Coarse-graining}: In molecular dynamics, derive effective potentials for coarse-grained representations
-    \item \textbf{Parameterization schemes}: In climate models, represent cloud physics and convection through simplified relationships
-\end{itemize}
 
 \subsection{Modern Data-Driven Approaches}
 
