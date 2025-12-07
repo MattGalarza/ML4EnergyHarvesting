@@ -1,124 +1,108 @@
-\documentclass[11pt, a4paper]{article}
-
-% --- Packages ---
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{geometry}
 \usepackage[utf8]{inputenc}
-\usepackage{amsmath, amssymb, amsfonts} % Math packages
-\usepackage{geometry} % Margins
-\usepackage{graphicx} % For images
-\usepackage{hyperref} % For hyperlinks
-\usepackage{natbib}   % Bibliography
-\usepackage{xcolor}   % For TODO notes
-\usepackage{booktabs} % Nice tables
-
-% --- Page Setup ---
+\usepackage{natbib}  
+\usepackage{xcolor} 
+\usepackage{booktabs} 
 \geometry{margin=1in}
-\setlength{\parskip}{0.5em}
-\setlength{\parindent}{0pt}
 
-% --- Custom Commands ---
-\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
-\newcommand{\state}{\mathbf{x}}
-\newcommand{\outputvec}{\mathbf{y}}
-\newcommand{\inputvec}{\mathbf{u}}
-
-% --- Title Data ---
-\title{\textbf{Bridging the Observable Gap: \\ SciML Architectures for Partially Observable Electromechanical Systems with Structural Model Error}}
-\author{Your Name \\ Ph.D. Candidate, [Your Department]}
-\date{\today}
+\title{Addressing the Closure Problem: State Estimation and Neural Approaches for Partially Observable Dynamical Systems with Structural Model Error}
+\author{Matthew G. Galarza}
+\date{Last Updated: \today}
+% \date{\today}
 
 \begin{document}
-
 \maketitle
 
-\begin{abstract}
-    \textit{Draft Abstract:} This research investigates the "Closure Problem" in electromechanical energy harvesters, where high-dimensional analytical models ($n \approx 7$) must be reconciled with low-dimensional experimental observations ($m \approx 1$). Unlike traditional system identification, which assumes a correct model structure and tunes parameters, this work addresses \textbf{structural model error} ("missing physics") in the presence of \textbf{hidden dynamics}. We propose a cascade framework integrating Universal Differential Equations (UDEs), Port-Hamiltonian Neural ODEs, and Koopman Operator theory to reconstruct hidden states and learn missing physical terms while strictly enforcing thermodynamic constraints.
-\end{abstract}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% ----------------------------------------------------------------------
-\section{Introduction: The Reactivity and Closure Problem}
-% ----------------------------------------------------------------------
+\section{Introduction}
 
-\subsection{The System Context}
-Electromechanical energy harvesters represent a class of "reactive" multi-domain dynamical systems. The system state $\state(t) \in \mathbb{R}^n$ evolves according to coupled mechanical and electrical laws, driven by inputs $\inputvec(t)$ (e.g., vibration source). However, the physical realization of the device offers only a limited observation $\outputvec(t) \in \mathbb{R}^m$, where $m \ll n$. 
+A fundamental challenge in the modeling of complex dynamical systems is one of closure where the evolution of the resolved variables depends on unresolved states, processes, and scales that are not directly accessible. This mismatch between the “true” system and its analytical or reduced approximation stems from partial observability, missing or inaccurate physics, and parameter uncertainty. The challenge is ubiqutous, appearing in a variety of diverse fields including turbulence modeling, climate science, molecular dynamics, and biological systems.
 
-Typically, only voltage or tip displacement is measurable, leaving internal states (such as coupled modes, magnetic hysteresis states, or thermal gradients) hidden.
+\subsection{The Reactivity and Closure Problem}
+Electromechanical energy harvesters represent a class of "reactive" multi-domain dynamical systems. The system state $\mathbf{x}(t) \in \mathbb{R}^n$ evolves according to coupled mechanical and electrical laws, driven by external inputs $\mathbf{u}(t)$ (e.g., stochastic vibration sources). A significant challenge in analyzing these systems is the discrepancy between the theoretical dimension of the system and the available data. 
 
-\subsection{The Closure Problem}
-Standard engineering approaches assume the analytical model $f_{analytical}$ is structurally correct and only requires parameter estimation ($\theta$). However, experimental evidence suggests the presence of \textbf{missing physics}—dynamics not captured by the derived constitutive equations. 
+While the analytical model typically involves $n \approx 7$ coupled states (representing mechanical modes, electrical potential, and internal flux linkages), the physical realization of the device usually offers limited observability $\mathbf{y}(t) \in \mathbb{R}^m$, where $m \ll n$. Typically, only output voltage or tip displacement is measurable, leaving internal states hidden.
 
-The research problem is thus defined as a "Closure Problem": How do we learn a correction term $g_{learn}(\state, \inputvec)$ such that:
+This creates a "Closure Problem." Standard engineering approaches assume the analytical model $f_{analytical}$ is structurally correct and only requires parameter estimation ($\theta$). However, experimental evidence suggests the presence of \textbf{missing physics}—dynamics not captured by the derived constitutive equations (e.g., unmodeled hysteresis, nonlinear damping, or higher-order coupling). The research objective is to learn a correction term $g_{learn}(\mathbf{x}, \mathbf{u})$ such that:
 \begin{equation}
-    \dot{\state} = f_{analytical}(\state, \inputvec; \theta) + g_{learn}(\state, \inputvec)
+    \dot{\mathbf{x}} = f_{analytical}(\mathbf{x}, \mathbf{u}; \theta) + g_{learn}(\mathbf{x}, \mathbf{u})
 \end{equation}
-subject to the constraint that $\state$ is only partially observable via $\outputvec = h(\state)$.
+subject to the constraint that $\mathbf{x}$ is only partially observable via $\mathbf{y} = h(\mathbf{x})$.
 
-% ----------------------------------------------------------------------
 \section{Baseline Methods: State Estimation \& Control Theory}
-% ----------------------------------------------------------------------
-\textit{Note: This section covers the advisor's recommendations as the "Classical Baseline."}
 
 \subsection{Kalman Filtering Variants (EKF/UKF)}
-State estimation techniques like the Extended Kalman Filter (EKF) utilize a predictor-corrector architecture to estimate hidden states $\hat{\state}$.
+State estimation techniques, such as the Extended Kalman Filter (EKF) and Unscented Kalman Filter (UKF), are the standard for inferring hidden states $\hat{\mathbf{x}}$ from noisy outputs $\mathbf{y}$.
 \begin{itemize}
-    \item \textbf{Strength:} Well-suited for noise reduction when the model structure $f_{analytical}$ is accurate.
-    \item \textbf{Limitation:} In the presence of structural error (missing physics), the Kalman Gain often "smears" the error into the state estimate, leading to bias rather than identifying the missing dynamic term.
+    \item \textbf{Utility:} These methods use a predictor-corrector architecture. The predictor propagates the analytical model, and the corrector updates the state based on the error between predicted and measured output.
+    \item \textbf{Limitation in this Context:} EKF assumes that the process noise is zero-mean Gaussian. In this research, the "noise" is actually \textbf{structural bias} (the missing physics). When $f_{analytical}$ is incorrect, the Kalman Gain forces the state estimate to compensate for the model error, often leading to biased state estimates rather than identifying the missing dynamic term.
 \end{itemize}
 
 \subsection{Nonlinear Model Predictive Control (NMPC)}
-\todo{Discuss NMPC utility for input-output mapping, but note its computational cost and reliance on model accuracy.}
+NMPC offers a framework for optimization-based control. While effective for trajectory planning, it typically requires a high-fidelity model to be available \textit{a priori}. In the context of missing physics, NMPC performance degrades rapidly as the prediction horizon increases.
 
-% ----------------------------------------------------------------------
 \section{SciML Frontiers: Investigated Avenues}
-% ----------------------------------------------------------------------
 
 \subsection{Universal Differential Equations (UDEs) \& Adjoint Optimization}
-To address the "missing physics," we investigate UDEs where a Neural Network (NN) approximates the unknown term $g_{learn}$. 
+To address the missing physics, we investigate Universal Differential Equations (UDEs), where a Neural Network (NN) approximates the unknown term $g_{learn}$.
 \begin{equation}
-    \dot{\state} = f_{physics} + \text{NN}(\state)
+    \dot{\mathbf{x}} = f_{physics}(\mathbf{x}) + \text{NN}(\mathbf{x}; \mathbf{W})
 \end{equation}
-\textbf{The Partial Observability Challenge:} Standard UDE training requires full state data. We propose utilizing \textbf{Adjoint Sensitivity Analysis} to backpropagate the error from the output trajectory $\outputvec(t)$ through the ODE solver to update the NN weights, effectively "inferring" the influence of hidden states on the output.
+A common misconception is that UDEs require data for all states $\mathbf{x}$. By utilizing \textbf{Adjoint Sensitivity Analysis}, we can train the network using only the output $\mathbf{y}$. The error between the predicted output $\hat{\mathbf{y}}$ and measured output $\mathbf{y}_{data}$ is backpropagated through the ODE solver to update the weights $\mathbf{W}$ of the neural network inside the derivative function.
+
+\begin{algorithm}
+\caption{Training UDE with Partial Observability (Adjoint Method)}
+\begin{algorithmic}[1]
+\STATE \textbf{Input:} Analytical model $f$, Neural Network $U_\theta$, Output Data $\mathbf{y}_{true}$
+\STATE \textbf{Initialize:} Network weights $\theta$
+\WHILE{Loss $>$ tolerance}
+    \STATE Solve forward ODE: $\dot{\mathbf{x}} = f(\mathbf{x}) + U_\theta(\mathbf{x})$ to get trajectory $\mathbf{x}(t)$
+    \STATE Compute predicted output: $\hat{\mathbf{y}}(t) = h(\mathbf{x}(t))$
+    \STATE Compute Loss: $\mathcal{L} = ||\hat{\mathbf{y}}(t) - \mathbf{y}_{true}(t)||^2$
+    \STATE Solve Adjoint ODE backward to get gradients $\nabla_\theta \mathcal{L}$
+    \STATE Update weights: $\theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}$
+\ENDWHILE
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Latent Dynamics \& Koopman Operator (HAVOK)}
-Since the true dimension of the "active" physics is unknown, we employ Hankel Alternative View of Koopman (HAVOK) analysis. By constructing Time-Delay Embeddings from the single output $\outputvec(t)$, we can reconstruct a diffeomorphic shadow manifold of the full system.
-\begin{itemize}
-    \item This validates if the "7-state" model is necessary or if the dynamics live on a lower-dimensional attractor.
-    \item Allows for linear embeddings of nonlinear phenomena.
-\end{itemize}
+Since the true dimension of the "active" physics is unknown, we investigate the Hankel Alternative View of Koopman (HAVOK). By constructing Time-Delay Embeddings from the single output $\mathbf{y}(t)$, we can reconstruct a shadow manifold of the full system. This technique allows for the identification of a linear operator acting on a lifted space, effectively bypassing the need for the analytical model to define the state basis.
 
-% ----------------------------------------------------------------------
-\section{Proposed Novelty: Energy-Constrained and Joint Architectures}
-% ----------------------------------------------------------------------
-\textit{Note: This section targets the "high value / not yet investigated" areas.}
+\section{Proposed Novelty: Energy-Constrained \& Joint Architectures}
 
 \subsection{Port-Hamiltonian Neural ODEs (PH-NODE)}
-A critical flaw in standard Black-Box Neural ODEs is the violation of conservation laws (e.g., generating free energy). For an energy harvester, this is physically inadmissible.
+A critical flaw in standard "black-box" Neural ODEs is the potential violation of conservation laws (e.g., generating free energy). For an energy harvester, energy conservation is the fundamental physical constraint.
 
-We propose a \textbf{Port-Hamiltonian framework} where the Neural Network learns the Hamiltonian (Energy function) $\mathcal{H}(\state)$ and the Damping matrix $R(\state)$, rather than the vector field directly:
+We propose investigating a \textbf{Port-Hamiltonian framework} where the Neural Network learns the Hamiltonian (Total Energy) function $\mathcal{H}(\mathbf{x})$ and the Damping matrix $R(\mathbf{x})$, rather than the vector field directly. The dynamics are defined as:
 \begin{equation}
-    \dot{\state} = [J(\state) - R(\state)] \nabla \mathcal{H}(\state) + G(\state)\inputvec
+    \dot{\mathbf{x}} = [J(\mathbf{x}) - R(\mathbf{x})] \nabla \mathcal{H}(\mathbf{x}) + G(\mathbf{x})\mathbf{u}
 \end{equation}
-This guarantees stability and passivity by construction, effectively constraining the "search space" for the missing physics to only physically realizable models.
+where $J(\mathbf{x})$ is the skew-symmetric interconnection structure and $R(\mathbf{x})$ is the positive semi-definite damping structure. This approach guarantees stability and passivity by construction, effectively constraining the "search space" for the missing physics to only physically realizable models.
 
 \subsection{Multi-Fidelity Transfer Learning}
-To overcome the lack of hidden state data, we propose a \textbf{Sim-to-Real Transfer} approach:
+To overcome the lack of hidden state data, a "Sim-to-Real" transfer learning approach is proposed:
 \begin{enumerate}
-    \item \textbf{Pre-training:} Train the UDE structure on high-fidelity FEM simulation data (where all $\state$ are known).
-    \item \textbf{Transfer:} Freeze the learned structure of the hidden couplings.
-    \item \textbf{Fine-tuning:} Use experimental output data $\outputvec$ to tune only the coefficients of the missing physics term via Adjoint Optimization.
+    \item \textbf{Pre-training:} Train the UDE structure on high-fidelity FEM simulation data (where all states $\mathbf{x}$ are observable) to capture the general structure of the nonlinearity.
+    \item \textbf{Transfer:} Freeze the learned architecture of the hidden couplings.
+    \item \textbf{Fine-tuning:} Use the limited experimental output data $\mathbf{y}$ to fine-tune the coefficients of the missing physics term via Adjoint Optimization.
 \end{enumerate}
 
-% ----------------------------------------------------------------------
-\section{Methodology Plan}
-% ----------------------------------------------------------------------
-\begin{enumerate}
-    \item \textbf{Data Collection:} Electromechanical harvester response under stochastic and harmonic excitation.
-    \item \textbf{Topological Analysis:} Apply HAVOK/Takens Embedding to determine intrinsic dimensionality.
-    \item \textbf{Baseline Comparison:} Implement EKF using the analytical 7-state model. Quantify residuals.
-    \item \textbf{SciML Implementation:} Develop the Port-Hamiltonian UDE framework in Julia (SciML ecosystem).
-\end{enumerate}
+\section{Future Work and Implementation Plan}
+The immediate next steps for this research involve:
+\begin{itemize}
+    \item Benchmarking the analytical model against experimental data to quantify the baseline residual.
+    \item Implementing a HAVOK analysis to determine the effective dimensionality of the experimental data.
+    \item Developing the Port-Hamiltonian UDE framework within the Julia SciML ecosystem.
+\end{itemize}
 
-% ----------------------------------------------------------------------
 \bibliographystyle{plain}
-\bibliography{references}
+% \bibliography{references} % Uncomment when bib file is ready
 
 \end{document}
