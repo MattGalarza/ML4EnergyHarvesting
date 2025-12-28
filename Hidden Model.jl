@@ -100,7 +100,7 @@ end
 
 # Sine Wave External Force
 f = 2.0 # Frequency (Hz)
-alpha = 0.75 # Applied acceleration constant
+alpha = 1 # Applied acceleration constant
 g = 9.81 # Gravitational constant 
 A = alpha * g
 t_ramp = 1.0 # Ramp-up duration (s)
